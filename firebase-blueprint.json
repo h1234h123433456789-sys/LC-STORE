@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Store product with name, price, stock, gallery images, description, etc.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "category": { "type": "string" },
+        "categoryLabel": { "type": "string" },
+        "priceUSD": { "type": "number" },
+        "priceIQD": { "type": "number" },
+        "originalPriceUSD": { "type": "number" },
+        "image": { "type": "string" },
+        "images": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "shortDesc": { "type": "string" },
+        "description": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "stockCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "specs": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "priceUSD", "image"]
+    },
+    "ProductList": {
+      "title": "ProductList",
+      "description": "Custom curated collection or product list created by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "productIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "productIds"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order placed in the store",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotalUSD": { "type": "number" },
+        "shippingUSD": { "type": "number" },
+        "totalUSD": { "type": "number" },
+        "currency": { "type": "string" },
+        "currencyRate": { "type": "number" },
+        "customer": { "type": "object" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string" },
+        "adminNotes": { "type": "string" }
+      },
+      "required": ["id", "orderNumber", "createdAt", "items", "totalUSD", "customer", "status"]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Customer account with unique email, phone, name, password, and block status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" },
+        "isBlocked": { "type": "boolean" },
+        "blockedAt": { "type": "string" },
+        "blockReason": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "phone", "password", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Catalog of all products in LC Luxury Boutique"
+    },
+    "/productLists/{listId}": {
+      "schema": "ProductList",
+      "description": "Curated collections and lists of products"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders made in the boutique"
+    },
+    "/users/{userId}": {
+      "schema": "UserAccount",
+      "description": "Registered customer accounts"
+    }
+  }
+}

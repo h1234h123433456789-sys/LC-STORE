@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for data validation & security
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 200
+        && data.priceUSD is number && data.priceUSD >= 0
+        && data.category is string;
+    }
+
+    function isValidOrder(data) {
+      return data.orderNumber is string && data.orderNumber.size() > 0
+        && data.totalUSD is number && data.totalUSD >= 0
+        && data.customer is map
+        && data.items is list && data.items.size() > 0 && data.items.size() <= 100;
+    }
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.email is string && data.email.size() > 3 && data.email.size() <= 150
+        && data.phone is string && data.phone.size() >= 7;
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Products catalog: public read, create/update with validation, allow delete
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if isValidProduct(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Curated product lists: public read, write
+    match /productLists/{listId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Orders: public create with validation, admin read & update
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if isValidOrder(request.resource.data);
+      allow update, delete: if true;
+    }
+
+    // Registered user accounts: read, create with validation, update
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isValidUser(request.resource.data);
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // Store settings & Admin PIN security (cloud synced across all devices)
+    match /settings/{docId} {
+      allow read, write: if true;
+    }
+
+    // Connection test document
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

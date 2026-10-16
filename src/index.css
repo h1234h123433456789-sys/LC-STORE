@@ -1,0 +1,326 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  body {
+    background-color: #080809;
+    color: #EDEDED;
+    font-family: 'Cairo', 'Alexandria', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    user-select: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cairo', 'Alexandria', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* iOS Safari Fix for Sticky/Fixed Menu Transparency Glitch on Scroll */
+header, nav, .sticky, .fixed {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #FFFDF0 0%, #F5DE88 25%, #D4AF37 60%, #AA771C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-bg {
+  background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #AA771C 100%);
+}
+
+.gold-card-glow {
+  box-shadow: 0 0 35px -10px rgba(212, 175, 55, 0.25);
+}
+
+.gold-border-glow {
+  border-color: rgba(212, 175, 55, 0.4);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.15);
+}
+
+.font-brand {
+  font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
+  letter-spacing: 0.05em;
+}
+
+/* Custom Luxury Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272A;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D4AF37;
+}
+
+/* iOS/Mac Inspired Fluid Animations */
+@keyframes continuous-marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-continuous-marquee {
+  display: flex;
+  width: max-content;
+  animation: continuous-marquee 28s linear infinite;
+  will-change: transform;
+}
+
+@keyframes iosFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes iosSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes iosSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes iosToastIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes macPageEntrance {
+  0% {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+
+@keyframes pulseGlowGold {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.04);
+  }
+}
+
+.animate-ios-fade-in {
+  animation: iosFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ios-slide-up {
+  animation: iosSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ios-slide-right {
+  animation: iosSlideRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ios-toast {
+  animation: iosToastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-mac-page {
+  animation: macPageEntrance 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlowGold 6s ease-in-out infinite;
+}
+
+/* Dynamic High-Visibility Luxury Gold Ambient Lighting Keyframes */
+@keyframes goldFlow1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.9) rotate(0deg);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(220px, 140px, 0) scale(1.35) rotate(45deg);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(-140px, 240px, 0) scale(1.1) rotate(-30deg);
+    opacity: 0.65;
+  }
+}
+
+@keyframes goldFlow2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.25) rotate(0deg);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate3d(-240px, -160px, 0) scale(0.85) rotate(-55deg);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(180px, -100px, 0) scale(1.3) rotate(35deg);
+    opacity: 0.65;
+  }
+}
+
+@keyframes goldFlow3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(190px, -200px, 0) scale(1.4);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(-180px, 140px, 0) scale(1.05);
+    opacity: 0.6;
+  }
+}
+
+@keyframes goldFlow4 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.15) rotate(0deg);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(-170px, 190px, 0) scale(0.85) rotate(45deg);
+    opacity: 0.92;
+  }
+  100% {
+    transform: translate3d(140px, -170px, 0) scale(1.3) rotate(-40deg);
+    opacity: 0.6;
+  }
+}
+
+@keyframes luxuryGoldBreath {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.9) translateZ(0);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.3) translateZ(0);
+  }
+}
+
+.animate-gold-flow-1 {
+  animation: goldFlow1 6.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform, opacity;
+}
+
+.animate-gold-flow-2 {
+  animation: goldFlow2 7.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform, opacity;
+}
+
+.animate-gold-flow-3 {
+  animation: goldFlow3 5.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform, opacity;
+}
+
+.animate-gold-flow-4 {
+  animation: goldFlow4 8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform, opacity;
+}
+
+.animate-gold-breath {
+  animation: luxuryGoldBreath 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform, opacity;
+}
+
+/* Mobile Performance Boost: Ultra-smooth scrolling and zero-lag rendering */
+@media (max-width: 768px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-lg {
+    backdrop-filter: blur(8px) !important;
+  }
+}
+
+/* Premium Card Tap / Press Micro-Interactions */
+.ios-card-hover {
+  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.25s cubic-bezier(0.2, 0, 0, 1), border-color 0.25s ease;
+}
+.ios-card-hover:hover {
+  transform: translateY(-3px) scale(1.008);
+}
+.ios-card-hover:active {
+  transform: scale(0.985);
+}
+
+/* Subtle Shimmer Effect for VIP elements */
+@keyframes goldShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.gold-shimmer {
+  background: linear-gradient(90deg, rgba(212,175,55,0) 0%, rgba(243,229,171,0.2) 50%, rgba(212,175,55,0) 100%);
+  background-size: 200% 100%;
+  animation: goldShimmer 3s infinite linear;
+}
+
+/* GPU Rendering & Hardware Acceleration Optimizations */
+.product-card-contain {
+  transform: translateZ(0);
+}

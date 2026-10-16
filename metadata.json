@@ -1,0 +1,6 @@
+{
+  "name": "LC Store",
+  "description": "متجر LC الرسمي - تسوق مباشر وتوصيل سريع لكافة المحافظات مع ميزة الفحص والمعاينة قبل الاستلام والدفع كاش.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

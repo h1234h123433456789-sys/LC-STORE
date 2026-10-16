@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Luxury Gold Gradients -->
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF5D6" />
+      <stop offset="30%" stop-color="#F3E5AB" />
+      <stop offset="60%" stop-color="#D4AF37" />
+      <stop offset="85%" stop-color="#B88A22" />
+      <stop offset="100%" stop-color="#8C6510" />
+    </linearGradient>
+
+    <linearGradient id="goldBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3E5AB" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#AA7A1E" stop-opacity="0.6" />
+    </linearGradient>
+
+    <!-- Deep Midnight Luxury Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#14141C" />
+      <stop offset="50%" stop-color="#0D0D12" />
+      <stop offset="100%" stop-color="#060608" />
+    </radialGradient>
+
+    <!-- Inner Squircle Surface Gradient -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A24" />
+      <stop offset="50%" stop-color="#14141B" />
+      <stop offset="100%" stop-color="#0D0D13" />
+    </linearGradient>
+
+    <!-- Soft Golden Glow -->
+    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feColorMatrix type="matrix" values="
+        1 0 0 0 0.83
+        0 1 0 0 0.68
+        0 0 1 0 0.21
+        0 0 0 0.35 0" in="blur" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="badgeGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+  </defs>
+
+  <!-- Full canvas background -->
+  <rect width="512" height="512" fill="url(#bgGrad)" />
+
+  <!-- Subtle ambient luxury light behind emblem -->
+  <circle cx="256" cy="256" r="210" fill="#D4AF37" opacity="0.08" filter="url(#goldGlow)" />
+
+  <!-- The Luxury Squircle Card (Identical to the website Hero Emblem) -->
+  <g filter="url(#goldGlow)">
+    <rect 
+      x="61" 
+      y="61" 
+      width="390" 
+      height="390" 
+      rx="88" 
+      ry="88" 
+      fill="url(#cardGrad)" 
+      stroke="url(#goldBorderGrad)" 
+      stroke-width="6" 
+    />
+  </g>
+
+  <!-- Subtle inner hairline border inside squircle -->
+  <rect 
+    x="69" 
+    y="69" 
+    width="374" 
+    height="374" 
+    rx="82" 
+    ry="82" 
+    fill="none" 
+    stroke="#F3E5AB" 
+    stroke-width="1.2" 
+    opacity="0.25" 
+  />
+
+  <!-- Subtle gold corner dots pattern inside squircle -->
+  <g opacity="0.12" fill="#D4AF37">
+    <circle cx="85" cy="85" r="2" />
+    <circle cx="99" cy="85" r="1.5" />
+    <circle cx="85" cy="99" r="1.5" />
+    <circle cx="427" cy="85" r="2" />
+    <circle cx="85" cy="427" r="2" />
+  </g>
+
+  <!-- Iconic Serif "LC" Wordmark (Vectorized Classical Roman Serif Typography) -->
+  <g fill="url(#goldGradient)" transform="translate(0, 0)">
+    <!-- Letter L: Classical Serif Geometry -->
+    <!-- Stem Serifs & Main Body -->
+    <path d="
+      M 136 166
+      L 211 166
+      L 211 183
+      L 189 183
+      L 189 303
+      L 246 303
+      C 266 303 276 291 281 271
+      L 293 271
+      L 293 326
+      L 136 326
+      L 136 303
+      L 159 303
+      L 159 183
+      L 136 183
+      Z
+    " />
+
+    <!-- Letter C: Classical Roman Arc with Fine Serifs -->
+    <path d="
+      M 376 201
+      C 371 189 359 176 339 169
+      C 299 157 259 193 259 246
+      C 259 299 299 335 343 335
+      C 365 335 379 319 389 301
+      L 375 295
+      C 365 309 353 317 339 317
+      C 311 317 289 287 289 246
+      C 289 205 311 175 339 175
+      C 355 175 367 185 373 201
+      Z
+    " />
+  </g>
+
+  <!-- The Iconic Sparkle Star Badge at bottom-right of the squircle (Exact match with website emblem!) -->
+  <g filter="url(#badgeGlow)">
+    <!-- Dark circle container with gold border -->
+    <circle 
+      cx="422.5" 
+      cy="422.5" 
+      r="38" 
+      fill="#0A0A0E" 
+      stroke="url(#goldBorderGrad)" 
+      stroke-width="4" 
+    />
+
+    <!-- Inner gold ring -->
+    <circle 
+      cx="422.5" 
+      cy="422.5" 
+      r="33" 
+      fill="none" 
+      stroke="#D4AF37" 
+      stroke-width="1" 
+      opacity="0.3" 
+    />
+
+    <!-- The 4-Point Golden Star Sparkle -->
+    <g transform="translate(422.5, 422.5)">
+      <path 
+        d="
+          M 0 -23.56
+          C 3.04 -6.84 6.84 -3.04 23.56 0
+          C 6.84 3.04 3.04 6.84 0 23.56
+          C -3.04 6.84 -6.84 3.04 -23.56 0
+          C -6.84 -3.04 -3.04 -6.84 0 -23.56
+          Z
+        " 
+        fill="url(#goldGradient)" 
+      />
+      <!-- Center bright star core -->
+      <circle cx="0" cy="0" r="4.56" fill="#FFF8D6" />
+    </g>
+  </g>
+</svg>
