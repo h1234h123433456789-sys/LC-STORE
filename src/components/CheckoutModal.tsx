@@ -151,7 +151,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </header>
 
           {/* Body Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-2xl mx-auto w-full scrollbar-thin space-y-5">
+          <main 
+            className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-2xl mx-auto w-full scrollbar-thin space-y-5"
+            style={{ WebkitOverflowScrolling: 'touch', transform: 'translateZ(0)' }}
+          >
             {error && (
               <div className="p-3 bg-red-950/80 border border-red-500/50 rounded-xl text-xs text-red-200 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />

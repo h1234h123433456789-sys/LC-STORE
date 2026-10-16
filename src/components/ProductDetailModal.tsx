@@ -165,7 +165,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </header>
 
         {/* Full Screen Body Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-5xl mx-auto w-full scrollbar-thin space-y-6 relative z-10">
+        <main 
+          className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-5xl mx-auto w-full scrollbar-thin space-y-6 relative z-10"
+          style={{ WebkitOverflowScrolling: 'touch', transform: 'translateZ(0)' }}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-start">
             
             {/* Left Column: Image Viewer Stage */}
