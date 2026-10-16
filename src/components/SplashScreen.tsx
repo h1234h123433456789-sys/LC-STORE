@@ -8,22 +8,22 @@ interface SplashScreenProps {
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   onFinish,
-  minDuration = 1800,
+  minDuration = 1200,
 }) => {
   const [isClosing, setIsClosing] = useState(false);
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    // Stage 1: Run the glorious gold emergence and shimmer animation
+    // Stage 1: Play the vibrant gold burst animation (1.2s total)
     const exitTimer = setTimeout(() => {
       setIsClosing(true);
     }, minDuration);
 
-    // Stage 2: Smooth cinematic dissolve into the store
+    // Stage 2: Smooth fade out into the store
     const finishTimer = setTimeout(() => {
       setIsDone(true);
       if (onFinish) onFinish();
-    }, minDuration + 500);
+    }, minDuration + 350);
 
     return () => {
       clearTimeout(exitTimer);
@@ -37,7 +37,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     setTimeout(() => {
       setIsDone(true);
       if (onFinish) onFinish();
-    }, 400);
+    }, 250);
   };
 
   if (isDone) return null;
@@ -48,189 +48,199 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       role="button"
       tabIndex={0}
       aria-label="تخطي شاشة البداية"
-      className={`fixed inset-0 z-[999999] bg-[#050507] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-all duration-500 ease-out ${
-        isClosing
-          ? 'opacity-0 scale-105 pointer-events-none filter blur-[6px]'
-          : 'opacity-100 scale-100 filter blur-0'
+      className={`fixed inset-0 z-[999999] bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-opacity duration-300 ease-out ${
+        isClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* 1. Ambient Expanding Golden Radial Aura */}
+      {/* 1. Large Radiant Golden Background Aura */}
       <div 
-        className="absolute w-[340px] h-[340px] sm:w-[480px] sm:h-[480px] rounded-full pointer-events-none"
+        className="absolute w-[320px] h-[320px] sm:w-[460px] sm:h-[460px] rounded-full pointer-events-none animate-aura-pulse"
         style={{
-          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.35) 0%, rgba(184, 138, 34, 0.15) 35%, rgba(117, 80, 10, 0.05) 60%, transparent 80%)',
-          animation: 'auraBurst 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate',
+          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.4) 0%, rgba(184, 138, 34, 0.18) 40%, rgba(117, 80, 10, 0.05) 70%, transparent 85%)',
         }}
       />
 
-      {/* 2. Concentric Golden Halo Rings for Depth */}
+      {/* 2. Concentric Golden Halo Ring */}
       <div 
-        className="absolute w-[260px] h-[260px] sm:w-[360px] sm:h-[360px] rounded-full border border-[#D4AF37]/20 pointer-events-none animate-halo-expand"
+        className="absolute w-[240px] h-[240px] sm:w-[340px] sm:h-[340px] rounded-full border border-[#D4AF37]/35 pointer-events-none animate-halo-expand"
         style={{
-          boxShadow: '0 0 45px rgba(212, 175, 55, 0.12), inset 0 0 45px rgba(212, 175, 55, 0.08)',
+          boxShadow: '0 0 35px rgba(212, 175, 55, 0.25), inset 0 0 35px rgba(212, 175, 55, 0.15)',
         }}
       />
 
-      {/* 3. The Grand LC Emergence (انبثاق الحروف الملكية وتدرج الإضاءة) */}
+      {/* 3. The Grand LC Emergence using 100% Native SVG (Guaranteed visible on ALL phones) */}
       <div className="relative flex flex-col items-center justify-center z-10 px-4">
         
-        {/* Monogram Stage with Spring Burst and Shimmer */}
-        <div className="relative inline-block mb-3 animate-lc-burst">
-          
-          {/* Intense 24K Royal Gold Embossed Serif Typography */}
-          <span 
-            className="block text-8xl sm:text-9xl font-extrabold tracking-wider"
+        {/* Monogram SVG Stage with Spring Burst Animation */}
+        <div className="relative animate-lc-burst">
+          <svg 
+            viewBox="0 0 300 180" 
+            className="w-56 h-36 sm:w-72 sm:h-44 overflow-visible"
+            style={{ filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.9))' }}
+          >
+            <defs>
+              {/* 24K Royal Gold Gradient */}
+              <linearGradient id="splashGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FFFFFF" />
+                <stop offset="15%" stop-color="#FFF8D6" />
+                <stop offset="35%" stop-color="#F7E7B4" />
+                <stop offset="60%" stop-color="#E5C158" />
+                <stop offset="85%" stop-color="#C29B27" />
+                <stop offset="100%" stop-color="#8F6A10" />
+              </linearGradient>
+
+              {/* Golden Bloom Filter */}
+              <filter id="goldBloom" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
+                <feColorMatrix type="matrix" values="
+                  1 0 0 0 0.83
+                  0 1 0 0 0.68
+                  0 0 1 0 0.21
+                  0 0 0 0.5 0" in="blur" result="glow" />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Glowing Halo Layer */}
+            <text 
+              x="150" 
+              y="105" 
+              textAnchor="middle" 
+              dominantBaseline="central" 
+              fontFamily="'Cinzel', 'Times New Roman', Georgia, serif" 
+              fontSize="125" 
+              fontWeight="900" 
+              fill="#D4AF37" 
+              opacity="0.6"
+              filter="url(#goldBloom)"
+              letterSpacing="6"
+            >
+              LC
+            </text>
+
+            {/* Main High-Contrast Metallic Gold Text Layer */}
+            <text 
+              x="150" 
+              y="105" 
+              textAnchor="middle" 
+              dominantBaseline="central" 
+              fontFamily="'Cinzel', 'Times New Roman', Georgia, serif" 
+              fontSize="125" 
+              fontWeight="900" 
+              fill="url(#splashGoldGrad)" 
+              letterSpacing="6"
+            >
+              LC
+            </text>
+          </svg>
+
+          {/* 4-Point Brilliant Star Sparkle Pop */}
+          <div 
+            className="absolute top-1 -right-2 text-[#FFF8D6] animate-sparkle-pop"
             style={{
-              fontFamily: "'Cinzel', Georgia, serif",
-              background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF8D6 15%, #F7E7B4 35%, #E5C158 55%, #C29B27 75%, #8F6A10 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 0 35px rgba(212, 175, 55, 0.6)) drop-shadow(0 15px 40px rgba(0,0,0,0.95))',
+              filter: 'drop-shadow(0 0 10px rgba(255, 248, 214, 1)) drop-shadow(0 0 20px rgba(212, 175, 55, 0.9))',
             }}
           >
-            LC
-          </span>
-
-          {/* Sweeping Shimmer Light Beam across the gold surface */}
-          <div 
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background: 'linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%)',
-              backgroundSize: '200% 100%',
-              mixBlendMode: 'overlay',
-              animation: 'goldGleamSweep 1.8s ease-in-out infinite',
-            }}
-          />
-
-          {/* 4-Point Brilliant Star Sparkle with Glowing Core */}
-          <div 
-            className="absolute -top-1 -right-3 text-[#FFF8D6] animate-sparkle-pop"
-            style={{
-              filter: 'drop-shadow(0 0 12px rgba(255, 248, 214, 1)) drop-shadow(0 0 25px rgba(212, 175, 55, 0.8))',
-            }}
-          >
-            <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-[#FFF8D6] fill-[#FFF8D6]" />
+            <Sparkles className="w-8 h-8 text-[#FFF8D6] fill-[#FFF8D6]" />
           </div>
         </div>
 
-        {/* 4. Brand Typography with Elegant Letter-Spacing Expansion */}
-        <div className="space-y-1.5 text-center animate-brand-reveal">
+        {/* 4. Brand Typography */}
+        <div className="space-y-1 text-center animate-brand-reveal mt-2">
           <div 
-            className="text-base sm:text-lg font-bold uppercase text-white/95"
+            className="text-base sm:text-lg font-bold uppercase text-white tracking-[0.35em]"
             style={{
               fontFamily: "'Cinzel', Georgia, serif",
-              letterSpacing: '0.35em',
-              textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+              textShadow: '0 2px 8px rgba(0,0,0,0.9)',
             }}
           >
             LC STORE
           </div>
-          <div 
-            className="text-xs sm:text-sm font-semibold tracking-[0.25em] text-[#D4AF37] uppercase font-sans"
-            style={{
-              textShadow: '0 0 15px rgba(212, 175, 55, 0.4)',
-            }}
-          >
+          <div className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-[#D4AF37]">
             متجر LC الرسمي
-          </div>
-          <div className="text-[11px] text-neutral-400 font-arabic pt-0.5 tracking-wider">
-            أفخم المعروضات والأزياء الراقية
           </div>
         </div>
 
-        {/* 5. Minimalist 24K Gold Progress Hairline */}
-        <div className="mt-8 w-40 sm:w-52 h-[2px] bg-white/10 rounded-full overflow-hidden relative">
+        {/* 5. Minimalist 24K Gold Progress Line */}
+        <div className="mt-6 w-36 sm:w-48 h-[2px] bg-white/10 rounded-full overflow-hidden relative">
           <div 
-            className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#AA7A1E] via-[#FFF3C4] to-[#D4AF37] rounded-full shadow-[0_0_12px_#D4AF37]"
+            className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#AA7A1E] via-[#FFF3C4] to-[#D4AF37] rounded-full shadow-[0_0_10px_#D4AF37]"
             style={{
-              animation: 'progressFill 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+              animation: 'progressFill 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards',
             }}
           />
         </div>
 
-        {/* Skip hint */}
-        <div className="mt-5 text-[10px] text-neutral-500 tracking-wider">
-          انقر في أي مكان للتخطي الفوري
+        {/* Quick Skip Prompt */}
+        <div className="mt-4 text-[10px] text-neutral-500 tracking-wider">
+          انقر في أي مكان للدخول الفوري
         </div>
       </div>
 
-      {/* Embedded High-Performance Keyframes */}
+      {/* Hardware-Accelerated Safe Keyframes (No blur filters that break mobile WebKit) */}
       <style>{`
-        /* 1. Grand LC Burst: scales up from deep focus with subtle bounce */
+        /* 1. Dramatic Spring Burst: scales up with clean GPU transform */
         @keyframes lcBurst {
           0% {
-            transform: scale(0.35) translateY(20px);
+            transform: scale(0.3) translateY(25px);
             opacity: 0;
-            filter: blur(14px) brightness(1.8);
           }
-          65% {
-            transform: scale(1.06) translateY(-4px);
+          60% {
+            transform: scale(1.08) translateY(-4px);
             opacity: 1;
-            filter: blur(0px) brightness(1.2);
           }
           100% {
             transform: scale(1) translateY(0);
             opacity: 1;
-            filter: blur(0px) brightness(1);
           }
         }
         .animate-lc-burst {
-          animation: lcBurst 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+          animation: lcBurst 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+          will-change: transform, opacity;
         }
 
         /* 2. Golden Aura Expansion */
-        @keyframes auraBurst {
+        @keyframes auraPulse {
           0% {
             transform: scale(0.75);
             opacity: 0.4;
           }
-          50% {
-            transform: scale(1.15);
-            opacity: 0.85;
-          }
           100% {
-            transform: scale(1);
-            opacity: 0.7;
+            transform: scale(1.1);
+            opacity: 0.9;
           }
+        }
+        .animate-aura-pulse {
+          animation: auraPulse 1.8s ease-in-out infinite alternate;
+          will-change: transform, opacity;
         }
 
         /* 3. Concentric Halo Expansion */
         @keyframes haloExpand {
           0% {
-            transform: scale(0.85);
+            transform: scale(0.8);
             opacity: 0;
-          }
-          60% {
-            transform: scale(1.05);
-            opacity: 0.7;
           }
           100% {
             transform: scale(1);
-            opacity: 0.5;
+            opacity: 0.6;
           }
         }
         .animate-halo-expand {
-          animation: haloExpand 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+          animation: haloExpand 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
         }
 
-        /* 4. Gleam light beam sweep across the gold letters */
-        @keyframes goldGleamSweep {
-          0% {
-            background-position: -150% 0;
-          }
-          50%, 100% {
-            background-position: 150% 0;
-          }
-        }
-
-        /* 5. Sparkle pop & twinkle */
+        /* 4. Sparkle pop & twinkle */
         @keyframes sparklePop {
           0% {
             transform: scale(0) rotate(-45deg);
             opacity: 0;
           }
-          50% {
-            transform: scale(1.25) rotate(15deg);
+          60% {
+            transform: scale(1.3) rotate(15deg);
             opacity: 1;
           }
           100% {
@@ -239,27 +249,25 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           }
         }
         .animate-sparkle-pop {
-          animation: sparklePop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both;
+          animation: sparklePop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.25s both;
         }
 
-        /* 6. Typography Reveal */
+        /* 5. Typography Reveal */
         @keyframes brandReveal {
           0% {
-            transform: translateY(16px);
+            transform: translateY(14px);
             opacity: 0;
-            filter: blur(4px);
           }
           100% {
             transform: translateY(0);
             opacity: 1;
-            filter: blur(0px);
           }
         }
         .animate-brand-reveal {
-          animation: brandReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+          animation: brandReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
         }
 
-        /* 7. Progress Line */
+        /* 6. Progress Line */
         @keyframes progressFill {
           0% { width: 0%; }
           100% { width: 100%; }

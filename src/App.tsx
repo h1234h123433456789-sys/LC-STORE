@@ -63,7 +63,25 @@ export default function App() {
     return 'store';
   });
 
-  const [hasPlayedIntro, setHasPlayedIntro] = useState(false);
+  const [hasPlayedIntro, setHasPlayedIntro] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        return sessionStorage.getItem('lc_has_played_intro') === 'true';
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  });
+
+  const handleSplashFinish = () => {
+    setHasPlayedIntro(true);
+    try {
+      sessionStorage.setItem('lc_has_played_intro', 'true');
+    } catch {
+      // ignore
+    }
+  };
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
 
   // Store Products (Real products added by the owner only)
@@ -1077,10 +1095,12 @@ export default function App() {
         onDeleteOrder={handleDeleteOrder}
         onExitAdmin={() => {
           try {
+            sessionStorage.setItem('lc_has_played_intro', 'true');
             sessionStorage.setItem('lc_splash_shown', 'true');
           } catch {
             // ignore
           }
+          setHasPlayedIntro(true);
           window.location.hash = '';
           setCurrentView('store');
         }}
@@ -1093,7 +1113,7 @@ export default function App() {
     <div key="storefront-view" className="relative min-h-screen bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
       
       {/* High-End Brand Luxury Splash Screen Animation */}
-      {!hasPlayedIntro && <SplashScreen onFinish={() => setHasPlayedIntro(true)} />}
+      {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}
 
       {/* Interactive Ambient Gold Lighting System */}
       <AmbientGoldAura />
