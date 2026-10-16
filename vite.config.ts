@@ -14,8 +14,8 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'متجر LC الفاخر | LC Boutique',
-          short_name: 'LC Store',
+          name: 'متجر LC الرسمي',
+          short_name: 'متجر LC الرسمي',
           description: 'المتجر العراقي الأول للمعروضات الحصرية الفاخرة مع خدمة التوصيل السريع والدفع كاش عند الاستلام لكافة المحافظات.',
           theme_color: '#080809',
           background_color: '#080809',

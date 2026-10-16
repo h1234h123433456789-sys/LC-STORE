@@ -63,6 +63,7 @@ export default function App() {
     return 'store';
   });
 
+  const [hasPlayedIntro, setHasPlayedIntro] = useState(false);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
 
   // Store Products (Real products added by the owner only)
@@ -1092,7 +1093,7 @@ export default function App() {
     <div key="storefront-view" className="relative min-h-screen bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
       
       {/* High-End Brand Luxury Splash Screen Animation */}
-      <SplashScreen />
+      {!hasPlayedIntro && <SplashScreen onFinish={() => setHasPlayedIntro(true)} />}
 
       {/* Interactive Ambient Gold Lighting System */}
       <AmbientGoldAura />
