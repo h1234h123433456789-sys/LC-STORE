@@ -1075,6 +1075,11 @@ export default function App() {
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onDeleteOrder={handleDeleteOrder}
         onExitAdmin={() => {
+          try {
+            sessionStorage.setItem('lc_splash_shown', 'true');
+          } catch {
+            // ignore
+          }
           window.location.hash = '';
           setCurrentView('store');
         }}

@@ -1,5 +1,5 @@
 // Service Worker for LC Boutique Background & Device Push Notifications
-const CACHE_NAME = 'lc-store-cache-v2';
+const CACHE_NAME = 'lc-store-cache-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

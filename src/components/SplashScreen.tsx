@@ -10,25 +10,48 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   onFinish,
   minDuration = 1800,
 }) => {
-  const [isVisible, setIsVisible] = useState(true);
+  // CRITICAL FIX: Only show splash screen once upon fresh app open/boot!
+  // NEVER show when switching from Admin to Storefront or toggling views.
+  const [isVisible, setIsVisible] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        // If already shown in this session, do not show again
+        if (sessionStorage.getItem('lc_splash_shown') === 'true') {
+          return false;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return true;
+  });
+
   const [isExiting, setIsExiting] = useState(false);
 
   const dismiss = () => {
     if (isExiting) return;
     setIsExiting(true);
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('lc_splash_shown', 'true');
+      }
+    } catch {
+      // ignore storage errors
+    }
     setTimeout(() => {
       setIsVisible(false);
       if (onFinish) onFinish();
-    }, 450);
+    }, 400);
   };
 
   useEffect(() => {
+    if (!isVisible) return;
     const timer = setTimeout(() => {
       dismiss();
     }, minDuration);
 
     return () => clearTimeout(timer);
-  }, [minDuration]);
+  }, [minDuration, isVisible]);
 
   if (!isVisible) return null;
 
@@ -38,7 +61,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       role="button"
       tabIndex={0}
       aria-label="تخطي شاشة البدء"
-      className={`fixed inset-0 z-[99999] bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-all duration-500 ease-out ${
+      className={`fixed inset-0 z-[99999] bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-all duration-400 ease-out ${
         isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
@@ -46,12 +69,12 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       <div 
         className="absolute w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.18) 0%, rgba(168, 122, 30, 0.05) 50%, transparent 75%)',
+          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, rgba(168, 122, 30, 0.05) 50%, transparent 75%)',
           animation: 'splashAuraPulse 3s ease-in-out infinite alternate',
         }}
       />
 
-      {/* Centerpiece: Pure Golden "LC" Monogram & Sparkle (No ugly square box!) */}
+      {/* Centerpiece: Pure Golden "LC" Monogram & Sparkle */}
       <div className="relative flex flex-col items-center justify-center z-10">
         
         {/* The LC Monogram Stage */}
@@ -62,10 +85,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             className="block text-7xl sm:text-8xl font-extrabold tracking-wider"
             style={{
               fontFamily: "'Cinzel', Georgia, serif",
-              background: 'linear-gradient(135deg, #FFFDF0 0%, #F7E7B4 25%, #E5C158 55%, #C29B27 80%, #8F6A10 100%)',
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF5D6 20%, #F5DE88 45%, #D4AF37 70%, #AA7A1E 90%, #75500A 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 4px 20px rgba(212, 175, 55, 0.35)) drop-shadow(0 15px 35px rgba(0,0,0,0.9))',
+              filter: 'drop-shadow(0 4px 20px rgba(212, 175, 55, 0.4)) drop-shadow(0 15px 35px rgba(0,0,0,0.95))',
             }}
           >
             LC
@@ -111,7 +134,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           <div 
             className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#AA7A1E] via-[#F3E5AB] to-[#D4AF37] rounded-full"
             style={{
-              animation: 'splashProgressFill 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+              animation: 'splashProgressFill 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards',
             }}
           />
         </div>
