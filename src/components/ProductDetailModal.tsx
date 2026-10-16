@@ -119,7 +119,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="fixed inset-0 z-[100] w-full h-[100dvh] bg-[#0A0A0E] flex flex-col overflow-hidden text-right"
+          className="fixed inset-0 z-[100] w-full h-full bg-[#0A0A0E] flex flex-col overflow-hidden text-right"
+          style={{ height: '100dvh', maxHeight: '-webkit-fill-available' }}
         >
         {/* Smooth, luxury gold ambient background (Zero GPU overhead) */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 bg-[#060609] select-none">
