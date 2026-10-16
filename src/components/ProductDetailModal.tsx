@@ -41,6 +41,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
   const [addedNotice, setAddedNotice] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (diff > 40) {
+      handleNextImage();
+    } else if (diff < -40) {
+      handlePrevImage();
+    }
+    setTouchStartX(null);
+  };
 
   // Reset index when product changes
   useEffect(() => {
@@ -151,7 +168,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-start">
             
             {/* Left Column: Image Viewer Stage */}
-            <div className="bg-[#0E0E14] border border-neutral-800/90 rounded-3xl p-4 sm:p-6 space-y-4 shadow-[0_0_50px_rgba(212,175,55,0.12)] relative">
+            <div className="bg-[#0E0E14] border border-neutral-800/90 rounded-3xl p-3 sm:p-6 space-y-3 sm:space-y-4 shadow-[0_0_50px_rgba(212,175,55,0.12)] relative">
+              
+              {/* Main Image Stage (Clean, fixed 1:1 ratio container with pure background and centered image) */}
               <div 
                 onClick={() => {
                   if (onOpenZoom && product) {
@@ -160,18 +179,32 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     setIsZoomed(true);
                   }
                 }}
-                className="relative w-full aspect-square max-h-[420px] bg-[#07070A] rounded-2xl overflow-hidden flex items-center justify-center border border-neutral-800 group cursor-zoom-in"
-                title="اضغط لتكبير وعرض الصورة بالحجم الكامل"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                className="relative w-full aspect-square max-h-[380px] sm:max-h-[420px] bg-[#07070B] rounded-2xl overflow-hidden flex items-center justify-center border border-[#D4AF37]/30 group cursor-zoom-in shadow-2xl select-none"
+                title="اضغط لتكبير وعرض الصورة بالحجم الكامل (أو اسحب للتنقل بين الصور)"
               >
-                <img
-                  src={currentImage}
-                  alt={product.name}
-                  referrerPolicy="no-referrer"
-                  decoding="async"
-                  // @ts-ignore
-                  fetchPriority="high"
-                  className="w-full h-full object-contain p-3 transition-transform duration-300 group-hover:scale-105 select-none"
-                />
+                {/* Main Product Image Centered Inside Strict Aspect Ratio */}
+                <div className="absolute inset-2 sm:inset-3 flex items-center justify-center z-10">
+                  <img
+                    key={currentImage}
+                    src={currentImage}
+                    alt={product.name}
+                    referrerPolicy="no-referrer"
+                    decoding="async"
+                    // @ts-ignore
+                    fetchPriority="high"
+                    className="max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-[0_15px_35px_rgba(0,0,0,0.95)] select-none"
+                  />
+                </div>
+
+                {/* Top-Right Badge: Photo Counter (e.g. 1 / 7) */}
+                {imagesList.length > 1 && (
+                  <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 border border-[#D4AF37]/60 text-[#F3E5AB] text-xs font-mono font-bold shadow-xl backdrop-blur-md">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>{selectedImageIndex + 1} / {imagesList.length}</span>
+                  </div>
+                )}
 
                 {/* Fullscreen Magnify button */}
                 <button
@@ -184,27 +217,36 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       setIsZoomed(true);
                     }
                   }}
-                  className="absolute bottom-3 left-3 px-3.5 py-2 rounded-xl bg-black/90 text-white hover:text-[#D4AF37] border border-[#D4AF37]/60 transition-all cursor-pointer shadow-2xl flex items-center gap-1.5 active:scale-95 z-10"
+                  className="absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-black/85 text-white hover:text-[#D4AF37] border border-[#D4AF37]/60 transition-all cursor-pointer shadow-2xl flex items-center gap-1.5 active:scale-95 z-20 backdrop-blur-md"
                   title="تكبير وعرض الصورة بالحجم الكامل"
                 >
-                  <Maximize2 className="w-4 h-4 text-[#D4AF37]" />
+                  <Maximize2 className="w-3.5 h-3.5 text-[#D4AF37]" />
                   <span className="text-xs font-bold">تكبير الصورة</span>
                 </button>
 
-                {/* Arrows for multi-images */}
+                {/* Swipe hint on mobile */}
+                {imagesList.length > 1 && (
+                  <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/80 text-neutral-300 text-[10px] font-medium backdrop-blur-md pointer-events-none border border-neutral-800">
+                    <span>اسحب للتنقل ↔</span>
+                  </div>
+                )}
+
+                {/* Navigation Arrows for multi-images */}
                 {imagesList.length > 1 && (
                   <>
                     <button
+                      type="button"
                       onClick={handlePrevImage}
                       aria-label="الصورة السابقة"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/80 text-white hover:bg-[#D4AF37] hover:text-black border border-neutral-700 transition-all cursor-pointer shadow-md"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/85 text-white hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/50 transition-all cursor-pointer shadow-2xl z-20 active:scale-90"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
                     <button
+                      type="button"
                       onClick={handleNextImage}
                       aria-label="الصورة التالية"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/80 text-white hover:bg-[#D4AF37] hover:text-black border border-neutral-700 transition-all cursor-pointer shadow-md"
+                      className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/85 text-white hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/50 transition-all cursor-pointer shadow-2xl z-20 active:scale-90"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -212,49 +254,47 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 )}
               </div>
 
-              {/* Thumbnails Row */}
+              {/* Thumbnails Row (Clean, high-contrast, zero grey scrollbar bug) */}
               {imagesList.length > 1 && (
-                <div className="pt-1">
-                  <div className="text-xs text-neutral-400 font-medium mb-2">
-                    صور المنتج ({imagesList.length} صور) - اضغط للمعاينة:
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-xs text-neutral-300 font-medium px-1">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>معرض الصور ({imagesList.length} صور متوفرة)</span>
+                    </span>
+                    <span className="text-[11px] text-[#D4AF37]">اضغط للمعاينة</span>
                   </div>
-                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
-                    {imagesList.map((imgUrl, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedImageIndex(index)}
-                        className={`relative w-16 h-16 rounded-2xl overflow-hidden border-2 shrink-0 transition-all bg-[#121218] cursor-pointer ${
-                          selectedImageIndex === index
-                            ? 'border-[#D4AF37] scale-105 shadow-[0_0_15px_rgba(212,175,55,0.4)]'
-                            : 'border-neutral-800 opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <img
-                          src={imgUrl}
-                          alt={`${product.name} - ${index + 1}`}
-                          className="w-full h-full object-contain p-1"
-                        />
-                      </button>
-                    ))}
+                  
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                    {imagesList.map((imgUrl, index) => {
+                      const isSelected = selectedImageIndex === index;
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setSelectedImageIndex(index)}
+                          className={`relative w-[68px] h-[68px] sm:w-[76px] sm:h-[76px] rounded-xl overflow-hidden border-2 shrink-0 transition-all p-1 flex items-center justify-center cursor-pointer ${
+                            isSelected
+                              ? 'border-[#D4AF37] bg-[#221F14] ring-2 ring-[#D4AF37]/60 shadow-[0_0_18px_rgba(212,175,55,0.5)] scale-105'
+                              : 'border-neutral-700/80 bg-[#14141E] opacity-75 hover:opacity-100 hover:border-[#D4AF37]/60'
+                          }`}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`${product.name} - ${index + 1}`}
+                            className="w-full h-full object-contain"
+                          />
+                          <span className={`absolute bottom-0.5 right-0.5 text-[9px] font-mono px-1 rounded-sm leading-none ${
+                            isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'bg-black/85 text-white'
+                          }`}>
+                            {index + 1}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-
-              {/* Guarantees Matrix */}
-              <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-3 gap-2 text-center text-xs text-neutral-300">
-                <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                  <Banknote className="w-4 h-4 text-[#D4AF37]" />
-                  <span className="text-[11px] font-medium">الدفع نقداً كاش</span>
-                </div>
-                <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                  <Truck className="w-4 h-4 text-[#D4AF37]" />
-                  <span className="text-[11px] font-medium">توصيل سريع</span>
-                </div>
-                <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                  <PackageCheck className="w-4 h-4 text-[#D4AF37]" />
-                  <span className="text-[11px] font-medium">تغليف محكم وأصلي</span>
-                </div>
-              </div>
 
             </div>
 
@@ -404,6 +444,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <p className="text-center text-[11px] text-neutral-400">
                   تدفع المبلغ نقداً للمندوب عند استلام الطلب في محافظتك
                 </p>
+
+                {/* Guarantees Matrix */}
+                <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-3 gap-2 text-center text-xs text-neutral-300">
+                  <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
+                    <Banknote className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="text-[11px] font-medium">الدفع نقداً كاش</span>
+                  </div>
+                  <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
+                    <Truck className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="text-[11px] font-medium">توصيل سريع</span>
+                  </div>
+                  <div className="bg-[#12121A] p-2.5 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
+                    <PackageCheck className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="text-[11px] font-medium">تغليف محكم وأصلي</span>
+                  </div>
+                </div>
               </div>
 
             </div>

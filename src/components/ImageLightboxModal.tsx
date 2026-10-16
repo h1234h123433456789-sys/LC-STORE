@@ -18,11 +18,28 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
     setIsZoomed(false);
   }, [initialIndex, isOpen]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null || isZoomed) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (diff > 45) {
+      handleNext();
+    } else if (diff < -45) {
+      handlePrev();
+    }
+    setTouchStartX(null);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -95,19 +112,27 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         </div>
       </header>
 
-      {/* Main Image Stage - Front & Center ("بالوجه") */}
+      {/* Main Image Stage - Front & Center */}
       <div 
-        className="flex-1 min-h-0 w-full relative flex items-center justify-center p-3 sm:p-6 bg-[#06060A] overflow-hidden"
+        className="flex-1 min-h-0 w-full relative flex items-center justify-center p-3 sm:p-6 bg-[#06060A] overflow-hidden select-none"
         onClick={() => setIsZoomed(!isZoomed)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Visual subtle container with light accent so dark/black clothing stands out clearly */}
-        <div className="relative max-w-full max-h-full flex items-center justify-center">
+        {/* Ambient Frosted Luxury Glow */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-3xl opacity-20 scale-125 pointer-events-none transition-all duration-500"
+          style={{ backgroundImage: `url(${currentImage})` }}
+        />
+
+        {/* Visual container so dark/black clothing stands out clearly */}
+        <div className="relative max-w-full max-h-full flex items-center justify-center z-10">
           <img
             key={currentImage}
             src={currentImage}
             alt={title || "عرض الصورة بالحجم الكامل"}
             referrerPolicy="no-referrer"
-            className={`max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] border border-neutral-800/80 bg-[#121218] p-2 sm:p-4 select-none ${
+            className={`max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.95)] border border-[#D4AF37]/30 bg-[#0C0C12] p-2 sm:p-4 select-none ${
               isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in hover:scale-[1.01]'
             }`}
           />
@@ -121,7 +146,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
               e.stopPropagation();
               handlePrev();
             }}
-            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 p-3 sm:p-3.5 rounded-full bg-black/80 hover:bg-[#D4AF37] text-white hover:text-black border border-neutral-700 transition-all active:scale-90 shadow-2xl cursor-pointer z-20"
+            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 p-3 sm:p-3.5 rounded-full bg-black/85 hover:bg-[#D4AF37] text-white hover:text-black border border-[#D4AF37]/50 transition-all active:scale-90 shadow-2xl cursor-pointer z-20"
             title="الصورة السابقة"
           >
             <ChevronRight className="w-6 h-6" />
@@ -136,7 +161,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
               e.stopPropagation();
               handleNext();
             }}
-            className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 p-3 sm:p-3.5 rounded-full bg-black/80 hover:bg-[#D4AF37] text-white hover:text-black border border-neutral-700 transition-all active:scale-90 shadow-2xl cursor-pointer z-20"
+            className="absolute left-3 sm:left-3 top-1/2 -translate-y-1/2 p-3 sm:p-3.5 rounded-full bg-black/85 hover:bg-[#D4AF37] text-white hover:text-black border border-[#D4AF37]/50 transition-all active:scale-90 shadow-2xl cursor-pointer z-20"
             title="الصورة التالية"
           >
             <ChevronLeft className="w-6 h-6" />
@@ -146,7 +171,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
 
       {/* Bottom Gallery Thumbnails Strip */}
       {images.length > 1 && (
-        <footer className="shrink-0 py-3 px-4 bg-[#0E0E14] border-t border-neutral-800 z-30 flex items-center justify-center gap-3 overflow-x-auto scrollbar-thin">
+        <footer className="shrink-0 py-3 px-4 bg-[#0E0E14] border-t border-neutral-800 z-30 flex items-center justify-center gap-2.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {images.map((img, idx) => (
             <button
               key={idx}
@@ -155,10 +180,10 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
                 setIsZoomed(false);
                 setCurrentIndex(idx);
               }}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all bg-black/70 p-1 cursor-pointer ${
+              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all bg-black/80 p-1 cursor-pointer ${
                 currentIndex === idx
                   ? 'border-[#D4AF37] scale-105 shadow-[0_0_15px_rgba(212,175,55,0.6)] ring-2 ring-[#D4AF37]/50'
-                  : 'border-neutral-700 opacity-60 hover:opacity-100 hover:border-neutral-500'
+                  : 'border-neutral-700 opacity-70 hover:opacity-100 hover:border-[#D4AF37]/40'
               }`}
             >
               <img src={img} alt={`مصغرة ${idx + 1}`} className="w-full h-full object-contain" />
