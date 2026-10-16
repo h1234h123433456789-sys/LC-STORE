@@ -48,7 +48,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       role="button"
       tabIndex={0}
       aria-label="تخطي شاشة البداية"
-      className={`fixed inset-0 z-[999999] bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-opacity duration-300 ease-out ${
+      style={{ height: '100dvh', maxHeight: '-webkit-fill-available' }}
+      className={`fixed inset-0 z-[999999] w-screen h-screen bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-opacity duration-300 ease-out ${
         isClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
