@@ -43,6 +43,7 @@ import { PWAInstallButton } from './components/PWAInstallButton';
 import { useOnlineStatus, FullOfflineScreen } from './components/OfflineIndicator';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { ImageLightboxModal } from './components/ImageLightboxModal';
+import { SplashScreen } from './components/SplashScreen';
 import { sendDeviceNotification } from './lib/notifications';
 import { formatPrice } from './utils/formatters';
 
@@ -1085,6 +1086,9 @@ export default function App() {
   return (
     <div key="storefront-view" className="relative min-h-screen bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
       
+      {/* High-End Brand Luxury Splash Screen Animation */}
+      <SplashScreen />
+
       {/* Interactive Ambient Gold Lighting System */}
       <AmbientGoldAura />
       

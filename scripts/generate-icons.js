@@ -2,254 +2,178 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-// 1. Generate the exact luxury LC emblem SVG matching the website's Hero card:
-// - Deep dark background (#09090C to #121218)
-// - Squircle / rounded-3xl container (#14141B) with #D4AF37 gold border and subtle gold glow
-// - Classic Roman / Cinzel serif "LC" in glowing gold gradient (#FDF4C7 -> #D4AF37 -> #AA7A1E)
-// - Bottom-right circular badge (#0A0A0C) with gold border (#D4AF37) containing the 4-point sparkle star!
-function getEmblemSvg({ maskable = false }) {
-  // If maskable, center the emblem within 80% safe zone (safe area diameter ~410px)
-  const squircleSize = maskable ? 320 : 390;
-  const radius = maskable ? 72 : 88;
-  const strokeWidth = maskable ? 5 : 6;
-  const badgeSize = maskable ? 64 : 76;
-  const badgeRadius = badgeSize / 2;
+async function generateAllIcons() {
+  const publicDir = path.resolve('public');
+  const fontPath = path.resolve('scripts/Cinzel-Bold.ttf');
 
-  // Squircle position (centered at 256, 256)
-  const sqX = 256 - squircleSize / 2;
-  const sqY = 256 - squircleSize / 2;
+  // 1. Download Cinzel-Bold font if not already cached
+  let base64Font = '';
+  if (fs.existsSync(fontPath)) {
+    base64Font = fs.readFileSync(fontPath).toString('base64');
+  } else {
+    console.log('Fetching official Cinzel font...');
+    const res = await fetch('https://fonts.gstatic.com/s/cinzel/v26/8vIU7ww63mVu7gtR-kwKxNvkNOjw-jHgTYo.ttf');
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(fontPath, buf);
+    base64Font = buf.toString('base64');
+    console.log('✓ Cached Cinzel-Bold.ttf');
+  }
 
-  // Star badge position (anchored to bottom-right of squircle)
-  const badgeX = sqX + squircleSize - badgeRadius * 0.75;
-  const badgeY = sqY + squircleSize - badgeRadius * 0.75;
+  // Helper to build SVG with mathematical safe-zone adherence
+  function buildSvg({ isMaskable = false, size = 512 }) {
+    // Android safe zone is 66% of canvas (~338px diameter, radius 169px)
+    // We size the content to fit within a strict 260px circle to guarantee 100% visibility on all devices
+    const fontSize = isMaskable ? 132 : 142;
+    const storeFontSize = isMaskable ? 14 : 15;
+    const storeY = isMaskable ? 320 : 326;
+    const textY = isMaskable ? 245 : 246;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Luxury Gold Gradients -->
-    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF5D6" />
-      <stop offset="30%" stop-color="#F3E5AB" />
-      <stop offset="60%" stop-color="#D4AF37" />
-      <stop offset="85%" stop-color="#B88A22" />
-      <stop offset="100%" stop-color="#8C6510" />
+    <style>
+      @font-face {
+        font-family: 'CinzelCustom';
+        src: url(data:font/truetype;charset=utf-8;base64,${base64Font}) format('truetype');
+        font-weight: 700;
+        font-style: normal;
+      }
+      .brand-title {
+        font-family: 'CinzelCustom', Georgia, serif;
+        font-size: ${fontSize}px;
+        font-weight: 700;
+        fill: url(#goldLinear);
+        text-anchor: middle;
+        dominant-baseline: central;
+        letter-spacing: 4px;
+        filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 25px rgba(212, 175, 55, 0.45));
+      }
+      .brand-sub {
+        font-family: 'CinzelCustom', Georgia, serif;
+        font-size: ${storeFontSize}px;
+        font-weight: 700;
+        fill: #D4AF37;
+        text-anchor: middle;
+        letter-spacing: 9px;
+        opacity: 0.95;
+        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9));
+      }
+    </style>
+
+    <!-- Ultra-Luxurious Royal Gold Multi-stop Gradient -->
+    <linearGradient id="goldLinear" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="20%" stop-color="#FFF3C4" />
+      <stop offset="45%" stop-color="#F2D06B" />
+      <stop offset="70%" stop-color="#D4AF37" />
+      <stop offset="90%" stop-color="#B88A22" />
+      <stop offset="100%" stop-color="#7A560B" />
     </linearGradient>
 
-    <linearGradient id="goldBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F3E5AB" stop-opacity="0.95" />
-      <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.8" />
-      <stop offset="100%" stop-color="#AA7A1E" stop-opacity="0.6" />
+    <!-- Golden Frame Ring Gradient -->
+    <linearGradient id="ringGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF8D6" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#AA7A1E" stop-opacity="0.4" />
     </linearGradient>
 
-    <!-- Deep Midnight Luxury Background Gradient -->
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
-      <stop offset="0%" stop-color="#14141C" />
-      <stop offset="50%" stop-color="#0D0D12" />
-      <stop offset="100%" stop-color="#060608" />
+    <!-- Ambient Luxury Gold Aura Bloom -->
+    <radialGradient id="goldAura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.32" />
+      <stop offset="45%" stop-color="#D4AF37" stop-opacity="0.10" />
+      <stop offset="85%" stop-color="#080809" stop-opacity="0" />
     </radialGradient>
 
-    <!-- Inner Squircle Surface Gradient -->
-    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1A1A24" />
-      <stop offset="50%" stop-color="#14141B" />
-      <stop offset="100%" stop-color="#0D0D13" />
+    <!-- Star Glow Gradient -->
+    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="50%" stop-color="#FFF3C4" />
+      <stop offset="100%" stop-color="#D4AF37" />
     </linearGradient>
-
-    <!-- Soft Golden Glow -->
-    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feColorMatrix type="matrix" values="
-        1 0 0 0 0.83
-        0 1 0 0 0.68
-        0 0 1 0 0.21
-        0 0 0 0.35 0" in="blur" result="coloredBlur" />
-      <feMerge>
-        <feMergeNode in="coloredBlur" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
-
-    <filter id="badgeGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.8" />
-    </filter>
   </defs>
 
-  <!-- Full canvas background -->
-  <rect width="512" height="512" fill="url(#bgGrad)" />
+  <!-- Seamless solid obsidian dark background (#080809) matching manifest -->
+  <rect width="512" height="512" fill="#080809" />
 
-  <!-- Subtle ambient luxury light behind emblem -->
-  <circle cx="256" cy="256" r="${maskable ? 180 : 210}" fill="#D4AF37" opacity="0.08" filter="url(#goldGlow)" />
+  <!-- Ambient Gold Core Light in Center -->
+  <circle cx="256" cy="256" r="210" fill="url(#goldAura)" />
 
-  <!-- The Luxury Squircle Card (Identical to the website Hero Emblem) -->
-  <g filter="url(#goldGlow)">
-    <rect 
-      x="${sqX}" 
-      y="${sqY}" 
-      width="${squircleSize}" 
-      height="${squircleSize}" 
-      rx="${radius}" 
-      ry="${radius}" 
-      fill="url(#cardGrad)" 
-      stroke="url(#goldBorderGrad)" 
-      stroke-width="${strokeWidth}" 
-    />
-  </g>
+  ${
+    !isMaskable
+      ? `
+  <!-- Luxury Circular Subtle Hairline Accent (Kept strictly inside safe boundaries) -->
+  <circle cx="256" cy="256" r="195" fill="none" stroke="url(#ringGold)" stroke-width="1.5" opacity="0.45" />
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#D4AF37" stroke-width="0.75" stroke-dasharray="4 8" opacity="0.3" />
+  `
+      : ''
+  }
 
-  <!-- Subtle inner hairline border inside squircle -->
-  <rect 
-    x="${sqX + 8}" 
-    y="${sqY + 8}" 
-    width="${squircleSize - 16}" 
-    height="${squircleSize - 16}" 
-    rx="${radius - 6}" 
-    ry="${radius - 6}" 
-    fill="none" 
-    stroke="#F3E5AB" 
-    stroke-width="1.2" 
-    opacity="0.25" 
-  />
+  <!-- Main Monogram: "LC" in pristine official Cinzel typography -->
+  <text x="256" y="${textY}" class="brand-title">LC</text>
 
-  <!-- Subtle gold corner dots pattern inside squircle -->
-  <g opacity="0.12" fill="#D4AF37">
-    <circle cx="${sqX + 24}" cy="${sqY + 24}" r="2" />
-    <circle cx="${sqX + 38}" cy="${sqY + 24}" r="1.5" />
-    <circle cx="${sqX + 24}" cy="${sqY + 38}" r="1.5" />
-    <circle cx="${sqX + squircleSize - 24}" cy="${sqY + 24}" r="2" />
-    <circle cx="${sqX + 24}" cy="${sqY + squircleSize - 24}" r="2" />
-  </g>
+  <!-- Tagline: "STORE" centered below LC with luxury wide letter spacing -->
+  <text x="260" y="${storeY}" class="brand-sub">STORE</text>
 
-  <!-- Iconic Serif "LC" Wordmark (Vectorized Classical Roman Serif Typography) -->
-  <g fill="url(#goldGradient)" transform="translate(${maskable ? '0, 0' : '0, 0'})">
-    <!-- Letter L: Classical Serif Geometry -->
-    <!-- Stem Serifs & Main Body -->
-    <path d="
-      M ${sqX + (maskable ? 60 : 75)} ${sqY + (maskable ? 85 : 105)}
-      L ${sqX + (maskable ? 120 : 150)} ${sqY + (maskable ? 85 : 105)}
-      L ${sqX + (maskable ? 120 : 150)} ${sqY + (maskable ? 100 : 122)}
-      L ${sqX + (maskable ? 102 : 128)} ${sqY + (maskable ? 100 : 122)}
-      L ${sqX + (maskable ? 102 : 128)} ${sqY + (maskable ? 200 : 242)}
-      L ${sqX + (maskable ? 148 : 185)} ${sqY + (maskable ? 200 : 242)}
-      C ${sqX + (maskable ? 165 : 205)} ${sqY + (maskable ? 200 : 242)} ${sqX + (maskable ? 172 : 215)} ${sqY + (maskable ? 190 : 230)} ${sqX + (maskable ? 176 : 220)} ${sqY + (maskable ? 175 : 210)}
-      L ${sqX + (maskable ? 186 : 232)} ${sqY + (maskable ? 175 : 210)}
-      L ${sqX + (maskable ? 186 : 232)} ${sqY + (maskable ? 218 : 265)}
-      L ${sqX + (maskable ? 60 : 75)} ${sqY + (maskable ? 218 : 265)}
-      L ${sqX + (maskable ? 60 : 75)} ${sqY + (maskable ? 200 : 242)}
-      L ${sqX + (maskable ? 78 : 98)} ${sqY + (maskable ? 200 : 242)}
-      L ${sqX + (maskable ? 78 : 98)} ${sqY + (maskable ? 100 : 122)}
-      L ${sqX + (maskable ? 60 : 75)} ${sqY + (maskable ? 100 : 122)}
-      Z
-    " />
-
-    <!-- Letter C: Classical Roman Arc with Fine Serifs -->
-    <path d="
-      M ${sqX + (maskable ? 260 : 315)} ${sqY + (maskable ? 115 : 140)}
-      C ${sqX + (maskable ? 255 : 310)} ${sqY + (maskable ? 105 : 128)} ${sqX + (maskable ? 245 : 298)} ${sqY + (maskable ? 95 : 115)} ${sqX + (maskable ? 228 : 278)} ${sqY + (maskable ? 90 : 108)}
-      C ${sqX + (maskable ? 195 : 238)} ${sqY + (maskable ? 80 : 96)} ${sqX + (maskable ? 162 : 198)} ${sqY + (maskable ? 110 : 132)} ${sqX + (maskable ? 162 : 198)} ${sqY + (maskable ? 152 : 185)}
-      C ${sqX + (maskable ? 162 : 198)} ${sqY + (maskable ? 194 : 238)} ${sqX + (maskable ? 195 : 238)} ${sqY + (maskable ? 224 : 274)} ${sqX + (maskable ? 232 : 282)} ${sqY + (maskable ? 224 : 274)}
-      C ${sqX + (maskable ? 250 : 304)} ${sqY + (maskable ? 224 : 274)} ${sqX + (maskable ? 262 : 318)} ${sqY + (maskable ? 212 : 258)} ${sqX + (maskable ? 270 : 328)} ${sqY + (maskable ? 198 : 240)}
-      L ${sqX + (maskable ? 258 : 314)} ${sqY + (maskable ? 192 : 234)}
-      C ${sqX + (maskable ? 250 : 304)} ${sqY + (maskable ? 204 : 248)} ${sqX + (maskable ? 240 : 292)} ${sqY + (maskable ? 210 : 256)} ${sqX + (maskable ? 228 : 278)} ${sqY + (maskable ? 210 : 256)}
-      C ${sqX + (maskable ? 205 : 250)} ${sqY + (maskable ? 210 : 256)} ${sqX + (maskable ? 188 : 228)} ${sqY + (maskable ? 186 : 226)} ${sqX + (maskable ? 188 : 228)} ${sqY + (maskable ? 152 : 185)}
-      C ${sqX + (maskable ? 188 : 228)} ${sqY + (maskable ? 118 : 144)} ${sqX + (maskable ? 205 : 250)} ${sqY + (maskable ? 94 : 114)} ${sqX + (maskable ? 228 : 278)} ${sqY + (maskable ? 94 : 114)}
-      C ${sqX + (maskable ? 242 : 294)} ${sqY + (maskable ? 94 : 114)} ${sqX + (maskable ? 252 : 306)} ${sqY + (maskable ? 102 : 124)} ${sqX + (maskable ? 256 : 312)} ${sqY + (maskable ? 115 : 140)}
-      Z
-    " />
-  </g>
-
-  <!-- The Iconic Sparkle Star Badge at bottom-right of the squircle (Exact match with website emblem!) -->
-  <g filter="url(#badgeGlow)">
-    <!-- Dark circle container with gold border -->
-    <circle 
-      cx="${badgeX}" 
-      cy="${badgeY}" 
-      r="${badgeRadius}" 
-      fill="#0A0A0E" 
-      stroke="url(#goldBorderGrad)" 
-      stroke-width="${maskable ? 3.5 : 4}" 
-    />
-
-    <!-- Inner gold ring -->
-    <circle 
-      cx="${badgeX}" 
-      cy="${badgeY}" 
-      r="${badgeRadius - 5}" 
-      fill="none" 
-      stroke="#D4AF37" 
-      stroke-width="1" 
-      opacity="0.3" 
-    />
-
-    <!-- The 4-Point Golden Star Sparkle -->
-    <g transform="translate(${badgeX}, ${badgeY})">
-      <path 
-        d="
-          M 0 ${-badgeRadius * 0.62}
-          C ${badgeRadius * 0.08} ${-badgeRadius * 0.18} ${badgeRadius * 0.18} ${-badgeRadius * 0.08} ${badgeRadius * 0.62} 0
-          C ${badgeRadius * 0.18} ${badgeRadius * 0.08} ${badgeRadius * 0.08} ${badgeRadius * 0.18} 0 ${badgeRadius * 0.62}
-          C ${-badgeRadius * 0.08} ${badgeRadius * 0.18} ${-badgeRadius * 0.18} ${badgeRadius * 0.08} ${-badgeRadius * 0.62} 0
-          C ${-badgeRadius * 0.18} ${-badgeRadius * 0.08} ${-badgeRadius * 0.08} ${-badgeRadius * 0.18} 0 ${-badgeRadius * 0.62}
-          Z
-        " 
-        fill="url(#goldGradient)" 
-      />
-      <!-- Center bright star core -->
-      <circle cx="0" cy="0" r="${badgeRadius * 0.12}" fill="#FFF8D6" />
-    </g>
+  <!-- Sparkling 4-Point Gold Star nestled precisely at the top-right of the "C" (Within safe zone!) -->
+  <g transform="translate(${isMaskable ? 332 : 338}, ${isMaskable ? 186 : 182})">
+    <!-- Star Glow -->
+    <circle cx="0" cy="0" r="16" fill="#D4AF37" opacity="0.45" />
+    <!-- Star Diamond -->
+    <path d="M 0 -22 C 2 -6 6 -2 22 0 C 6 2 2 6 0 22 C -2 6 -6 2 -22 0 C -6 -2 -2 -6 0 -22 Z" fill="url(#starGrad)" />
+    <!-- Bright Diamond Center Core -->
+    <circle cx="0" cy="0" r="3.5" fill="#FFFFFF" />
   </g>
 </svg>`;
-}
+  }
 
-async function run() {
-  const publicDir = path.resolve('public');
+  console.log('Generating ultra-crisp luxury icons using official Cinzel typography...');
 
-  console.log('Generating SVG icons matching the website LC emblem...');
-  const standardSvg = getEmblemSvg({ maskable: false });
-  const maskableSvg = getEmblemSvg({ maskable: true });
+  const standardSvg = buildSvg({ isMaskable: false });
+  const maskableSvg = buildSvg({ isMaskable: true });
 
   // 1. Save standard icon.svg
   fs.writeFileSync(path.join(publicDir, 'icon.svg'), standardSvg);
   console.log('✓ Wrote public/icon.svg');
 
-  // 2. Generate PNGs using sharp
-  // A. 512x512 standard
+  // 2. 512x512 standard
   await sharp(Buffer.from(standardSvg))
     .resize(512, 512)
     .png({ quality: 100, compressionLevel: 9 })
     .toFile(path.join(publicDir, 'pwa-512x512.png'));
   console.log('✓ Generated public/pwa-512x512.png');
 
-  // B. 192x192 standard
+  // 3. 192x192 standard
   await sharp(Buffer.from(standardSvg))
     .resize(192, 192)
     .png({ quality: 100, compressionLevel: 9 })
     .toFile(path.join(publicDir, 'pwa-192x192.png'));
   console.log('✓ Generated public/pwa-192x192.png');
 
-  // C. 512x512 maskable (safe-zone centered for Android)
+  // 4. 512x512 maskable (Guaranteed Safe Zone for Samsung, Pixel, Xiaomi, etc.)
   await sharp(Buffer.from(maskableSvg))
     .resize(512, 512)
     .png({ quality: 100, compressionLevel: 9 })
     .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
   console.log('✓ Generated public/pwa-maskable-512x512.png');
 
-  // D. 180x180 Apple Touch Icon (iOS Safari)
+  // 5. 180x180 Apple Touch Icon (iOS Safari)
   await sharp(Buffer.from(standardSvg))
     .resize(180, 180)
     .png({ quality: 100, compressionLevel: 9 })
     .toFile(path.join(publicDir, 'apple-touch-icon.png'));
   console.log('✓ Generated public/apple-touch-icon.png');
 
-  // E. Favicon ICO (standard 48x48 PNG format or ico)
+  // 6. Favicon ICO (48x48)
   await sharp(Buffer.from(standardSvg))
     .resize(48, 48)
     .png()
     .toFile(path.join(publicDir, 'favicon.ico'));
   console.log('✓ Generated public/favicon.ico');
 
-  console.log('All icons generated successfully!');
+  console.log('🎉 All icons generated with mathematical precision and safe-zone compliance!');
 }
 
-run().catch((err) => {
+generateAllIcons().catch((err) => {
   console.error('Error generating icons:', err);
   process.exit(1);
 });

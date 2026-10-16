@@ -16,7 +16,7 @@ export default defineConfig(() => {
           id: '/',
           name: 'متجر LC الفاخر | LC Boutique',
           short_name: 'LC Store',
-          description: 'المتجر العراقي الأول للمعروضات الحصرية الفاخرة مع الدفع كاش عند الاستلام والمعاينة المباشرة.',
+          description: 'المتجر العراقي الأول للمعروضات الحصرية الفاخرة مع خدمة التوصيل السريع والدفع كاش عند الاستلام لكافة المحافظات.',
           theme_color: '#080809',
           background_color: '#080809',
           display: 'standalone',
