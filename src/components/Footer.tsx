@@ -8,7 +8,7 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onOpenAdmin }) => {
   return (
-    <footer className="w-full bg-[#060608]/40 border-t border-[#D4AF37]/15 text-neutral-400 text-xs mt-20">
+    <footer className="w-full bg-[#060608]/40 border-t border-[#D4AF37]/15 text-neutral-400 text-xs mt-20 shrink-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-14">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-right items-center">
           

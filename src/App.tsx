@@ -1110,7 +1110,7 @@ export default function App() {
 
   // Live Customer Storefront view
   return (
-    <div key="storefront-view" className="relative min-h-screen bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
+    <div key="storefront-view" className="relative min-h-[100dvh] bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
       
       {/* High-End Brand Luxury Splash Screen Animation */}
       {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}

@@ -147,7 +147,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
       {/* Outer Strip Frame with Luxury Gold Outline */}
       <div 
         dir="ltr"
-        className="relative w-full rounded-2xl bg-[#0B0B0F]/95 backdrop-blur-md border border-[#D4AF37]/35 shadow-[0_4px_25px_rgba(0,0,0,0.65)] overflow-hidden cursor-grab active:cursor-grabbing select-none p-2 sm:p-2.5"
+        className="relative w-full rounded-2xl bg-[#0B0B0F]/95 backdrop-blur-md border border-[#D4AF37]/35 shadow-[0_4px_25px_rgba(0,0,0,0.65)] overflow-hidden cursor-grab active:cursor-grabbing select-none p-2 sm:p-2.5 shrink-0"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
