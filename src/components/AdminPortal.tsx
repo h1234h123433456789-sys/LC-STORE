@@ -45,7 +45,8 @@ import {
   UserPlus,
   UserMinus,
   Key,
-  Smartphone
+  Smartphone,
+  MessageCircle
 } from 'lucide-react';
 import { Product, Order, ProductList, AdminStaffMember } from '../types';
 import { formatPrice, formatDateTime } from '../utils/formatters';
@@ -773,6 +774,36 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     } else {
       setNewSizes((prev) => [...prev, sizePreset]);
     }
+  };
+
+  const handleSendOrderWhatsApp = (ord: Order) => {
+    const phone = ord.customer?.phone || '';
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '964' + cleanPhone.substring(1);
+    } else if (!cleanPhone.startsWith('964')) {
+      cleanPhone = '964' + cleanPhone;
+    }
+
+    const itemsSummary = (ord.items || [])
+      .map(
+        (it) =>
+          `• ${it.product?.name || 'منتج'}${it.selectedSize ? ` (القياس: ${it.selectedSize})` : ''} × ${it.quantity} — ${formatPrice((it.product?.priceUSD || 0) * (it.quantity || 1), ord.currency)}`
+      )
+      .join('\n');
+
+    const subtotalNum = (ord.items || []).reduce((sum, it) => {
+      const p = (it.product?.priceUSD || 0) * (it.quantity || 1);
+      return sum + (p > 0 && p <= 500 ? Math.round(p * 1320) : Math.round(p));
+    }, 0);
+
+    const deliveryFee = 5000;
+    const grandTotal = subtotalNum + deliveryFee;
+
+    const message = `مرحباً بك يا ${ord.customer?.name || 'عزيزنا الزبون'} 👋\nشكرًا لتسوقك في متجر LC Store 🛍️✨\n\nهل تريد تأكيد طلبك رقم: #${ord.orderNumber}؟\n\n📍 عنوان التوصيل: ${ord.customer?.city || 'العراق'} - ${ord.customer?.address || ''}\n\nالمنتجات المطلوبة:\n${itemsSummary}\n\n────────────────\n🔹 سعر المنتجات: ${subtotalNum.toLocaleString('ar-IQ')} د.ع\n🚚 سعر التوصيل: ${deliveryFee.toLocaleString('ar-IQ')} د.ع\n💰 المجموع الكلي (مع التوصيل): ${grandTotal.toLocaleString('ar-IQ')} د.ع\n────────────────\n\nالدفع كاش عند الاستلام.\nيرجى تأكيد الطلب للبدء بالتجهيز وإرساله إليك! شكراً لاختيارك LC ⚜️`;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
   };
 
   // Edit Size handlers for Edit Product Modal
@@ -1791,8 +1822,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         )}
 
                         <button
+                          onClick={() => handleSendOrderWhatsApp(ord)}
+                          className="px-3 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-600 border border-emerald-500/50 rounded-lg flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                          title="إرسال رسالة تفاصيل الطلب وتأكيده للزبون عبر الواتساب"
+                        >
+                          <MessageCircle className="w-4 h-4 text-emerald-300" />
+                          <span>إرسال واتساب للزبون</span>
+                        </button>
+
+                        <button
                           onClick={() => setWaybillOrder(ord)}
-                          className="px-3 py-2 text-xs font-semibold text-[#F3E5AB] bg-[#181822] hover:bg-[#22222E] border border-[#D4AF37]/40 rounded-lg flex items-center gap-1.5 transition-colors"
+                          className="px-3 py-2 text-xs font-semibold text-[#F3E5AB] bg-[#181822] hover:bg-[#22222E] border border-[#D4AF37]/40 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                           title="عرض وطباعة بوليصة التوصيل للمندوب"
                         >
                           <Printer className="w-4 h-4 text-[#D4AF37]" />
@@ -2069,6 +2109,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           طريقة الدفع: الدفع نقداً عند استلام الشحنة
                         </span>
                         <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSendOrderWhatsApp(ord)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition cursor-pointer text-[11px] flex items-center gap-1.5 shadow-sm"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>مراسلة واتساب</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => {

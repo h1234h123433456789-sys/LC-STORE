@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Clock, Banknote, Lock } from 'lucide-react';
+import { ShieldCheck, Clock, Banknote, Lock, Headphones } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface FooterProps {
@@ -22,19 +22,45 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdmin }) => {
             </p>
           </div>
 
-          {/* Core Guarantees (No customer service references) */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 sm:justify-end text-neutral-300">
-            <div className="flex items-center gap-2">
-              <Banknote className="w-4 h-4 text-[#D4AF37]" />
-              <span>دفع كاش عند الاستلام</span>
+          {/* Core Guarantees & Customer Service */}
+          <div className="flex flex-col sm:flex-row gap-6 sm:justify-end text-neutral-350 items-start sm:items-center">
+            <div className="bg-[#12121A] border border-[#D4AF37]/30 px-4 py-3 rounded-2xl flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-[#D4AF37]/25 text-[#D4AF37]">
+                <Headphones className="w-5 h-5" />
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-neutral-400">خدمة العملاء والدعم الفني</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <a href="tel:07707387227" className="font-mono text-sm font-bold text-[#F3E5AB] hover:underline" dir="ltr">07707387227</a>
+                  <div className="flex items-center gap-1.5 mr-2">
+                    <a
+                      href="https://wa.me/9647707387227"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all"
+                    >
+                      واتساب
+                    </a>
+                    <a
+                      href="tel:07707387227"
+                      className="px-2 py-0.5 rounded-lg bg-[#222230] hover:bg-[#2A2A3D] text-[#F3E5AB] border border-[#D4AF37]/40 text-[11px] font-bold transition-all"
+                    >
+                      اتصال
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-              <span>معاينة الطلب قبل الدفع</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#D4AF37]" />
-              <span>توصيل لكافة المحافظات</span>
+
+            <div className="flex flex-col gap-2 text-neutral-300">
+              <div className="flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-[#D4AF37]" />
+                <span>دفع كاش عند الاستلام</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
+                <span>معاينة الطلب قبل الدفع</span>
+              </div>
             </div>
           </div>
 
