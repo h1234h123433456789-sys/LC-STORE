@@ -46,10 +46,11 @@ import {
   UserMinus,
   Key,
   Smartphone,
-  MessageCircle
+  MessageCircle,
+  Truck
 } from 'lucide-react';
-import { Product, Order, ProductList, AdminStaffMember } from '../types';
-import { formatPrice, formatDateTime } from '../utils/formatters';
+import { Product, Order, ProductList, AdminStaffMember, FreeShippingConfig } from '../types';
+import { formatPrice, formatDateTime, toIQD } from '../utils/formatters';
 import { compressImageFile } from '../utils/imageCompressor';
 import { ProductListsManager } from './ProductListsManager';
 import { NotificationCenterModal } from './NotificationCenterModal';
@@ -84,6 +85,8 @@ interface AdminPortalProps {
   onDeleteCategory?: (cat: string) => void;
   onUpdateOrderStatus: (orderId: string, newStatus: 'pending' | 'approved' | 'rejected' | 'delivered') => void;
   onDeleteOrder: (orderId: string) => void;
+  freeShippingConfig?: FreeShippingConfig;
+  onUpdateFreeShippingConfig?: (config: FreeShippingConfig) => void;
   onExitAdmin: () => void;
 }
 
@@ -103,6 +106,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onDeleteCategory,
   onUpdateOrderStatus,
   onDeleteOrder,
+  freeShippingConfig = { enabled: true, minItemsCount: 2 },
+  onUpdateFreeShippingConfig,
   onExitAdmin
 }) => {
   // Multi-Staff and Admin Authentication State
@@ -797,10 +802,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       return sum + (p > 0 && p <= 500 ? Math.round(p * 1320) : Math.round(p));
     }, 0);
 
-    const deliveryFee = 5000;
-    const grandTotal = subtotalNum + deliveryFee;
+    const minAmount = freeShippingConfig?.minOrderAmountIQD || 50000;
+    const qualifiesForFreeShipping =
+      ord.isFreeShipping === true ||
+      ord.shippingUSD === 0 ||
+      (ord.isFreeShipping === undefined &&
+        Boolean(freeShippingConfig?.enabled && subtotalNum >= minAmount));
 
-    const message = `مرحباً بك يا ${ord.customer?.name || 'عزيزنا الزبون'} 👋\nشكرًا لتسوقك في متجر LC Store 🛍️✨\n\nهل تريد تأكيد طلبك رقم: #${ord.orderNumber}؟\n\n📍 عنوان التوصيل: ${ord.customer?.city || 'العراق'} - ${ord.customer?.address || ''}\n\nالمنتجات المطلوبة:\n${itemsSummary}\n\n────────────────\n🔹 سعر المنتجات: ${subtotalNum.toLocaleString('ar-IQ')} د.ع\n🚚 سعر التوصيل: ${deliveryFee.toLocaleString('ar-IQ')} د.ع\n💰 المجموع الكلي (مع التوصيل): ${grandTotal.toLocaleString('ar-IQ')} د.ع\n────────────────\n\nالدفع كاش عند الاستلام.\nيرجى تأكيد الطلب للبدء بالتجهيز وإرساله إليك! شكراً لاختيارك LC ⚜️`;
+    const deliveryFee = qualifiesForFreeShipping ? 0 : 5000;
+    const grandTotal = subtotalNum + deliveryFee;
+    const deliveryLine = qualifiesForFreeShipping
+      ? `🚚 سعر التوصيل: مجاني 🎉 (عرض التوصيل المجاني)`
+      : `🚚 سعر التوصيل: ${deliveryFee.toLocaleString('ar-IQ')} د.ع`;
+
+    const message = `مرحباً بك يا ${ord.customer?.name || 'عزيزنا الزبون'} 👋\nشكرًا لتسوقك في متجر LC Store 🛍️✨\n\nهل تريد تأكيد طلبك رقم: #${ord.orderNumber}؟\n\n📍 عنوان التوصيل: ${ord.customer?.city || 'العراق'} - ${ord.customer?.address || ''}\n\nالمنتجات المطلوبة:\n${itemsSummary}\n\n────────────────\n🔹 سعر المنتجات: ${subtotalNum.toLocaleString('ar-IQ')} د.ع\n${deliveryLine}\n💰 المجموع الكلي (مع التوصيل): ${grandTotal.toLocaleString('ar-IQ')} د.ع\n────────────────\n\nالدفع كاش عند الاستلام.\nيرجى تأكيد الطلب للبدء بالتجهيز وإرساله إليك! شكراً لاختيارك LC ⚜️`;
 
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
@@ -1486,6 +1501,116 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         {/* ================= TAB 1: ORDERS MANAGEMENT ================= */}
         {activeTab === 'orders' && (
           <div key="tab-orders" className="space-y-4 animate-mac-tab">
+
+            {/* Free Shipping Threshold Control Panel (By Order Price in IQD) */}
+            <div className="bg-gradient-to-br from-[#14141D] via-[#111117] to-[#121218] border border-[#D4AF37]/45 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-neutral-800/90">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.2)]">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
+                      <span>نظام التوصيل المجاني التلقائي حسب السعر النهائي للطلب</span>
+                      {freeShippingConfig?.enabled ? (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-600/60 font-bold">
+                          مفعل حالياً 🟢 ({formatPrice(freeShippingConfig?.minOrderAmountIQD || 50000, 'IQD')})
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 font-bold">
+                          متوقف 🔴
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+                      حدد المبلغ (بالدينار العراقي) الذي إذا وصل إليه مجموع سلة الزبون أو تجاوزه يصبح التوصيل مجانياً تلقائياً ويظهر شريط التقدم بالسلة
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!onUpdateFreeShippingConfig) return;
+                    const nextEnabled = !freeShippingConfig?.enabled;
+                    const currentAmount = freeShippingConfig?.minOrderAmountIQD || 50000;
+                    onUpdateFreeShippingConfig({
+                      enabled: nextEnabled,
+                      minOrderAmountIQD: currentAmount
+                    });
+                    showToast(
+                      nextEnabled
+                        ? `تم تفعيل التوصيل المجاني للطلبات بقيمة ${formatPrice(currentAmount, 'IQD')} فأكثر`
+                        : 'تم إيقاف عرض التوصيل المجاني في السلة'
+                    );
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 active:scale-95 ${
+                    freeShippingConfig?.enabled
+                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600/70 hover:bg-emerald-900/80'
+                      : 'bg-[#181822] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
+                  }`}
+                >
+                  {freeShippingConfig?.enabled ? 'إيقاف العرض المؤقت' : 'تفعيل عرض التوصيل المجاني'}
+                </button>
+              </div>
+
+              {freeShippingConfig?.enabled && (
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
+                  <div className="text-xs text-neutral-300 font-semibold">
+                    حدد السعر المطلوب (د.ع) لتفعيل التوصيل المجاني تلقائياً:
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[25000, 35000, 50000, 75000, 100000].map((amount) => {
+                      const isSelected = (freeShippingConfig?.minOrderAmountIQD || 50000) === amount;
+                      return (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => {
+                            if (!onUpdateFreeShippingConfig) return;
+                            onUpdateFreeShippingConfig({
+                              enabled: true,
+                              minOrderAmountIQD: amount
+                            });
+                            showToast(`تم تحديد التوصيل المجاني للطلبات بقيمة ${formatPrice(amount, 'IQD')} أو أكثر!`);
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer active:scale-95 font-mono ${
+                            isSelected
+                              ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                              : 'bg-[#181822] text-neutral-300 border-neutral-700 hover:border-[#D4AF37]/60 hover:text-white'
+                          }`}
+                        >
+                          {formatPrice(amount, 'IQD')}
+                        </button>
+                      );
+                    })}
+
+                    {/* Custom Price Input in IQD */}
+                    <div className="flex items-center gap-1.5 bg-[#181822] border border-[#D4AF37]/40 rounded-xl px-3 py-1.5 shadow-inner">
+                      <span className="text-[11px] text-[#F3E5AB] font-semibold">سعر مخصص:</span>
+                      <input
+                        type="number"
+                        min={1000}
+                        step={1000}
+                        value={freeShippingConfig?.minOrderAmountIQD || 50000}
+                        onChange={(e) => {
+                          const val = Math.max(1000, Number(e.target.value) || 1000);
+                          if (onUpdateFreeShippingConfig) {
+                            onUpdateFreeShippingConfig({
+                              enabled: true,
+                              minOrderAmountIQD: val
+                            });
+                          }
+                        }}
+                        className="w-24 text-center bg-black/70 border border-neutral-700 focus:border-[#D4AF37] rounded-lg py-1 px-1.5 text-xs font-mono font-bold text-[#F3E5AB] outline-none"
+                      />
+                      <span className="text-[11px] text-neutral-400 font-bold">د.ع</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             
             {/* Redesigned Responsive Orders Filter & Search Bar */}
             <div className="bg-[#111116] border border-neutral-800 rounded-2xl p-4 space-y-3.5">
@@ -1749,11 +1874,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                     {/* Footer Row: Total Cash to Collect & Action Buttons (Approve / Reject) */}
                     <div className="pt-3 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-neutral-400">المبلغ المطلوب استلامه كاش:</span>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-xs text-neutral-400">سعر المنتجات:</span>
                         <span className="text-lg font-bold gold-gradient-text tabular-nums font-mono">
                           {formatPrice(ord.totalUSD, ord.currency)}
                         </span>
+                        {(ord.isFreeShipping || ord.shippingUSD === 0) ? (
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/50">
+                            + توصيل مجاني 🎉
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-[#1A1A24] text-[#F3E5AB] border border-neutral-700 font-mono">
+                            + 5,000 د.ع توصيل
+                          </span>
+                        )}
                       </div>
 
                       {/* Primary Owner Actions */}
@@ -4087,14 +4221,36 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Total to Collect */}
-            <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 flex justify-between items-center">
-              <div>
-                <div className="text-xs text-neutral-600 font-bold">المبلغ المطلوب استلامه نقداً (كاش) من الزبون:</div>
-                <div className="text-[11px] text-neutral-500">يدفع الزبون للمندوب بعد استلام ومعاينة الطلب</div>
-              </div>
-              <div className="text-2xl font-black font-mono text-neutral-900">
-                {formatPrice(waybillOrder.totalUSD, waybillOrder.currency)}
-              </div>
+            <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 space-y-2">
+              {(() => {
+                const isWaybillFreeShipping = waybillOrder.isFreeShipping !== undefined
+                  ? waybillOrder.isFreeShipping
+                  : (freeShippingConfig.enabled && toIQD(waybillOrder.totalUSD) >= (freeShippingConfig.minOrderAmountIQD || 50000));
+                const grandTotal = isWaybillFreeShipping ? toIQD(waybillOrder.totalUSD) : toIQD(waybillOrder.totalUSD) + 5000;
+                return (
+                  <>
+                    <div className="flex items-center justify-between text-xs border-b border-yellow-300/70 pb-1.5">
+                      <span className="text-neutral-700 font-semibold">أجور التوصيل:</span>
+                      {isWaybillFreeShipping ? (
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                          توصيل مجاني 🎉 (0 د.ع)
+                        </span>
+                      ) : (
+                        <span className="font-bold font-mono text-neutral-800">5,000 د.ع</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <div>
+                        <div className="text-xs text-neutral-800 font-bold">المبلغ الكلي المطلوب استلامه نقداً (كاش):</div>
+                        <div className="text-[11px] text-neutral-500">الدفع نقداً عند الاستلام يداً بيد</div>
+                      </div>
+                      <div className="text-2xl font-black font-mono text-neutral-900">
+                        {formatPrice(grandTotal, waybillOrder.currency)}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Action buttons */}

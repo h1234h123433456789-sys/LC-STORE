@@ -78,6 +78,13 @@ export interface Order {
   paymentMethod: 'cod';
   status: 'pending' | 'approved' | 'rejected' | 'delivered';
   adminNotes?: string;
+  isFreeShipping?: boolean;
+}
+
+export interface FreeShippingConfig {
+  enabled: boolean;
+  minOrderAmountIQD: number; // Minimum order subtotal in IQD to unlock free shipping
+  minItemsCount?: number; // Legacy fallback
 }
 
 export interface AdminStaffMember {
@@ -88,4 +95,5 @@ export interface AdminStaffMember {
   createdAt: string;
   lastLoginAt?: string;
 }
+
 

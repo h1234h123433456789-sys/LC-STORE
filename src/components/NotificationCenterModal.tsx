@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, 
   BellRing, 
@@ -48,8 +49,6 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
       setNotifications(getNotificationHistory());
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handleEnableNotifications = async () => {
     setIsRequesting(true);
@@ -108,17 +107,39 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   };
 
   return (
-    <div 
-      dir="rtl"
-      className="fixed inset-0 z-[100] min-h-screen w-full bg-[#080809] text-[#EDEDED] flex flex-col overflow-y-auto selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] animate-mac-page"
-    >
-      {/* 1. Luxury Sticky Top Header - Directly in the Face / Top View */}
-      <header className="sticky top-0 z-30 bg-[#0A0A0C]/95 backdrop-blur-md border-b border-[#D4AF37]/25 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-lg shrink-0">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          dir="rtl"
+          className="fixed inset-0 z-[100] h-[100dvh] w-full bg-[#08080C] text-[#EDEDED] flex flex-col overflow-y-auto selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB]"
+        >
+      {/* Dynamic Gold Ambient Lighting for Notification Center */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div
+          className="absolute -top-32 -right-24 w-[580px] h-[580px] rounded-full animate-gold-flow-1"
+          style={{
+            background: 'radial-gradient(circle, rgba(212, 175, 55, 0.22) 0%, rgba(212, 175, 55, 0.08) 40%, transparent 72%)'
+          }}
+        />
+        <div
+          className="absolute bottom-0 -left-24 w-[560px] h-[560px] rounded-full animate-gold-flow-2"
+          style={{
+            background: 'radial-gradient(circle, rgba(243, 229, 171, 0.16) 0%, rgba(212, 175, 55, 0.05) 40%, transparent 72%)'
+          }}
+        />
+      </div>
+
+      {/* 1. Luxury Sticky Top Header */}
+      <header className="sticky top-0 z-30 bg-[#0F0F15] border-b border-[#D4AF37]/20 px-4 sm:px-8 py-3 flex items-center justify-between shadow-md shrink-0">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#20202F] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#181822] hover:bg-[#222230] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-colors cursor-pointer active:scale-95"
           >
             <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
             <span>{isAdmin ? 'العودة للوحة الإدارة' : 'العودة للمتجر'}</span>
@@ -152,7 +173,13 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
       </header>
 
       {/* 2. Main Body Content - Aligned Directly in the Face (بالوجه مباشرة) */}
-      <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col justify-start space-y-6">
+      <motion.main 
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+        className="relative z-10 flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col justify-start space-y-6"
+      >
         
         {/* Prominent Hero Card for Activating Notifications */}
         <div className="relative w-full rounded-3xl bg-gradient-to-b from-[#181824] via-[#111117] to-[#0A0A0E] border border-[#D4AF37]/40 shadow-[0_20px_60px_rgba(0,0,0,0.85)] p-6 sm:p-8 text-center space-y-6 overflow-hidden">
@@ -329,13 +356,15 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
           )}
         </div>
 
-      </main>
+      </motion.main>
 
       {/* 3. Luxury Bottom Footer */}
-      <footer className="w-full bg-[#060608]/90 border-t border-[#D4AF37]/15 py-4 px-6 text-center text-[11px] text-neutral-500 shrink-0 mt-auto">
+      <footer className="relative z-10 w-full bg-[#060608]/90 border-t border-[#D4AF37]/15 py-4 px-6 text-center text-[11px] text-neutral-500 shrink-0 mt-auto">
         جميع الحقوق محفوظة © {new Date().getFullYear()} لمتجر <span className="text-[#F3E5AB] font-semibold">LC Store</span>
       </footer>
 
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Sparkles, Package, X, Clock, ShieldCheck, Lock, Layers, Database, Tag } from 'lucide-react';
-import { Product, CartItem, User, Order, ProductList } from './types';
+import { Product, CartItem, User, Order, ProductList, FreeShippingConfig } from './types';
 import { INITIAL_PRODUCTS } from './data/initialProducts';
 import { 
   testConnection, 
@@ -24,7 +24,9 @@ import {
   updateOrderStatusInFirestore,
   deleteOrderFromFirestore,
   subscribeToStoreCategories,
-  saveStoreCategoriesToFirestore
+  saveStoreCategoriesToFirestore,
+  subscribeToFreeShippingConfig,
+  saveFreeShippingConfigToFirestore
 } from './lib/firebase';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -188,6 +190,40 @@ export default function App() {
     showToast(`تمت إضافة الأقسام بنجاح`);
   };
 
+  // Free Shipping Promotion Config (Synced across devices via Firestore - Price threshold in IQD)
+  const [freeShippingConfig, setFreeShippingConfig] = useState<FreeShippingConfig>(() => {
+    try {
+      const saved = localStorage.getItem('lc_free_shipping_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.enabled === 'boolean') {
+          const rawAmount = typeof parsed.minOrderAmountIQD === 'number' ? parsed.minOrderAmountIQD : 50000;
+          return {
+            enabled: parsed.enabled,
+            minOrderAmountIQD: Math.max(1000, Math.floor(rawAmount))
+          };
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return { enabled: true, minOrderAmountIQD: 50000 };
+  });
+
+  const handleUpdateFreeShippingConfig = (newConfig: FreeShippingConfig) => {
+    const sanitized: FreeShippingConfig = {
+      enabled: Boolean(newConfig.enabled),
+      minOrderAmountIQD: Math.max(1000, Math.floor(Number(newConfig.minOrderAmountIQD) || 50000))
+    };
+    setFreeShippingConfig(sanitized);
+    try {
+      localStorage.setItem('lc_free_shipping_config', JSON.stringify(sanitized));
+    } catch (e) {
+      console.warn(e);
+    }
+    saveFreeShippingConfigToFirestore(sanitized).catch(console.warn);
+  };
+
   const [lightboxState, setLightboxState] = useState<{
     isOpen: boolean;
     images: string[];
@@ -244,6 +280,7 @@ export default function App() {
   const [isOrderSuccessOpen, setIsOrderSuccessOpen] = useState(false);
   const [isMyOrdersOpen, setIsMyOrdersOpen] = useState(false);
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [returnToProductOnCancel, setReturnToProductOnCancel] = useState<Product | null>(null);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -438,6 +475,17 @@ export default function App() {
       }
     });
 
+    const unsubFreeShipping = subscribeToFreeShippingConfig((remoteConfig) => {
+      if (remoteConfig && typeof remoteConfig.enabled === 'boolean') {
+        setFreeShippingConfig(remoteConfig);
+        try {
+          localStorage.setItem('lc_free_shipping_config', JSON.stringify(remoteConfig));
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    });
+
     const unsubPin = subscribeToAdminPin((cloudPin) => {
       if (cloudPin && cloudPin.trim()) {
         localStorage.setItem('lc_admin_pin', cloudPin.trim());
@@ -461,6 +509,7 @@ export default function App() {
         unsubLists();
         unsubOrders();
         unsubCategories();
+        unsubFreeShipping();
         unsubPin();
       } catch (e) {
         console.warn('Error unsubscribing on quota exceeded:', e);
@@ -505,6 +554,7 @@ export default function App() {
       unsubLists();
       unsubOrders();
       unsubCategories();
+      unsubFreeShipping();
       unsubPin();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('firestore-quota-exceeded', handleQuotaExceededEvent);
@@ -567,31 +617,28 @@ export default function App() {
     };
   }, []);
 
-  // Centralized robust body scroll lock to fix touch hang ("تعلك لمس الموقع") when modals are open
+  // Centralized body scroll lock without clamping body height to 100dvh (prevents scroll jump & lighting flash when opening modals)
+  const isAnyModalOpen = Boolean(
+    selectedProduct || 
+    isCartOpen || 
+    isAuthOpen || 
+    isMyOrdersOpen || 
+    isCheckoutOpen || 
+    isOrderSuccessOpen ||
+    isNotificationCenterOpen ||
+    lightboxState.isOpen
+  );
+
   useEffect(() => {
-    const isAnyModalOpen = 
-      !!selectedProduct || 
-      isCartOpen || 
-      isAuthOpen || 
-      isMyOrdersOpen || 
-      isCheckoutOpen || 
-      isOrderSuccessOpen;
-    
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
-      document.body.style.height = '100dvh';
-      document.documentElement.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      document.body.style.height = '';
-      document.documentElement.style.overflow = '';
     }
     return () => {
       document.body.style.overflow = '';
-      document.body.style.height = '';
-      document.documentElement.style.overflow = '';
     };
-  }, [selectedProduct, isCartOpen, isAuthOpen, isMyOrdersOpen, isCheckoutOpen, isOrderSuccessOpen]);
+  }, [isAnyModalOpen]);
 
   useEffect(() => {
     try {
@@ -708,7 +755,13 @@ export default function App() {
       const existing = prev.find(
         (item) => item?.product?.id === product.id && item?.selectedSize === selectedSize
       );
-      if (existing) return prev;
+      if (existing) {
+        return prev.map((item) =>
+          item?.product?.id === product.id && item?.selectedSize === selectedSize
+            ? { ...item, quantity }
+            : item
+        );
+      }
       return [...prev, { product, quantity, selectedSize }];
     });
 
@@ -750,10 +803,11 @@ export default function App() {
   const handleOrderPlaced = async (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
     setCart([]);
-    setLatestOrder(newOrder);
     setIsCheckoutOpen(false); // Close checkout modal
     setIsCartOpen(false);     // Close cart drawer
     setSelectedProduct(null); // Close any active product modal
+    setReturnToProductOnCancel(null); // Clear return product state
+    setLatestOrder(newOrder);
     setIsOrderSuccessOpen(true);
     showToast(`تم استلام طلبك بنجاح! رقم الطلب: ${newOrder.orderNumber}`);
 
@@ -1074,43 +1128,57 @@ export default function App() {
     return <FullOfflineScreen onRetry={() => window.location.reload()} />;
   }
 
-  // If in dedicated Admin Portal view
-  if (currentView === 'admin') {
-    return (
-      <AdminPortal
-        products={products}
-        orders={orders}
-        productLists={productLists}
-        allCategories={allMasterCategories}
-        currency={currency}
-        onAddProduct={handleAddProduct}
-        onUpdateProduct={handleUpdateProduct}
-        onDeleteProduct={handleDeleteProduct}
-        onAddList={handleAddList}
-        onUpdateList={handleUpdateList}
-        onDeleteList={handleDeleteList}
-        onAddCategories={handleAddStoreCategories}
-        onDeleteCategory={handleDeleteStoreCategory}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
-        onDeleteOrder={handleDeleteOrder}
-        onExitAdmin={() => {
-          try {
-            sessionStorage.setItem('lc_has_played_intro', 'true');
-            sessionStorage.setItem('lc_splash_shown', 'true');
-          } catch {
-            // ignore
-          }
-          setHasPlayedIntro(true);
-          window.location.hash = '';
-          setCurrentView('store');
-        }}
-      />
-    );
-  }
-
-  // Live Customer Storefront view
+  // Smooth Animated Page Transition between Storefront and Admin Portal
   return (
-    <div key="storefront-view" className="relative min-h-[100dvh] bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden animate-mac-page">
+    <AnimatePresence mode="wait">
+      {currentView === 'admin' ? (
+        <motion.div
+          key="admin-view"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <AdminPortal
+            products={products}
+            orders={orders}
+            productLists={productLists}
+            allCategories={allMasterCategories}
+            currency={currency}
+            onAddProduct={handleAddProduct}
+            onUpdateProduct={handleUpdateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            onAddList={handleAddList}
+            onUpdateList={handleUpdateList}
+            onDeleteList={handleDeleteList}
+            onAddCategories={handleAddStoreCategories}
+            onDeleteCategory={handleDeleteStoreCategory}
+            onUpdateOrderStatus={handleUpdateOrderStatus}
+            onDeleteOrder={handleDeleteOrder}
+            freeShippingConfig={freeShippingConfig}
+            onUpdateFreeShippingConfig={handleUpdateFreeShippingConfig}
+            onExitAdmin={() => {
+              try {
+                sessionStorage.setItem('lc_has_played_intro', 'true');
+                sessionStorage.setItem('lc_splash_shown', 'true');
+              } catch {
+                // ignore
+              }
+              setHasPlayedIntro(true);
+              window.location.hash = '';
+              setCurrentView('store');
+            }}
+          />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="storefront-view"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          className="relative min-h-[100dvh] bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden"
+        >
       
       {/* High-End Brand Luxury Splash Screen Animation */}
       {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}
@@ -1118,19 +1186,27 @@ export default function App() {
       {/* Interactive Ambient Gold Lighting System */}
       <AmbientGoldAura />
       
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-xl bg-[#14141A] border border-[#D4AF37]/80 text-[#F3E5AB] text-xs font-semibold shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center gap-3 animate-ios-toast">
-          <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-          <span>{toastMessage}</span>
-          <button 
-            onClick={() => setToastMessage(null)}
-            className="text-neutral-400 hover:text-white p-0.5"
+      {/* Toast Notification (Top-Center Floating Pill) */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -14, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 24 }}
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-[110] px-3.5 py-2.5 rounded-2xl bg-[#14141D]/95 backdrop-blur-md border border-[#D4AF37]/80 text-[#F3E5AB] text-xs font-bold shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center gap-2.5 max-w-[92vw]"
           >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+            <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <span>{toastMessage}</span>
+            <button 
+              onClick={() => setToastMessage(null)}
+              className="text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Customer Navigation Bar */}
       <Navbar
@@ -1155,6 +1231,7 @@ export default function App() {
           el?.scrollIntoView({ behavior: 'smooth' });
         }}
         hasProducts={products.length > 0}
+        freeShippingConfig={freeShippingConfig}
       />
 
       {/* Featured Products Interactive Marquee Strip */}
@@ -1165,16 +1242,21 @@ export default function App() {
         />
       )}
 
-      {/* Main Catalog Section */}
-      <main id="catalog" className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-14 space-y-7">
+      {/* Main Catalog Section (Compact & Sleek) */}
+      <main id="catalog" className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-3.5">
         
-        {/* Admin-Created Custom Lists & Collections (Visible when lists exist) */}
+        {/* Admin-Created Custom Lists & Collections (Compact Box) */}
         {productLists.length > 0 && products.length > 0 && (
-          <div className="space-y-3 bg-[#111116] p-4 rounded-2xl border border-neutral-800/90 text-right">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="relative z-10 space-y-2 bg-gradient-to-br from-[#13131B]/95 to-[#0E0E14]/95 p-2.5 sm:p-3.5 rounded-2xl border border-[#D4AF37]/30 shadow-lg text-right"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#D4AF37] flex items-center gap-1.5">
-                <Layers className="w-4 h-4" />
-                <span>قوائم ومجموعات المنتجات:</span>
+              <span className="text-[11px] sm:text-xs font-extrabold text-[#D4AF37] flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                <span>قوائم ومجموعات المنتجات المميزة:</span>
               </span>
               {activeListId !== 'all' && (
                 <button
@@ -1183,28 +1265,28 @@ export default function App() {
                     setActiveListId('all');
                     setActiveCategory('all');
                   }}
-                  className="text-[11px] text-[#F3E5AB] hover:underline cursor-pointer"
+                  className="text-[10px] sm:text-[11px] text-[#F3E5AB] hover:underline cursor-pointer font-semibold"
                 >
-                  إلغاء الفلترة وعرض كافة المعروضات
+                  عرض كافة المعروضات
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
               <button
                 type="button"
                 onClick={() => {
                   setActiveListId('all');
                   setActiveCategory('all');
                 }}
-                className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${
+                className={`relative px-3 py-1.5 text-[11px] font-extrabold rounded-lg whitespace-nowrap cursor-pointer select-none active:scale-95 transition-all duration-150 ${
                   activeListId === 'all'
-                    ? 'bg-[#D4AF37] text-black shadow-[0_0_12px_rgba(212,175,55,0.3)]'
-                    : 'bg-[#181822] text-neutral-300 hover:text-white border border-neutral-800'
+                    ? 'gold-gradient-bg text-black shadow-[0_0_15px_rgba(212,175,55,0.35)] font-black'
+                    : 'bg-[#181822] text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700'
                 }`}
               >
                 <span>كافة المعروضات</span>
-                <span className="mr-1.5 text-[10px] opacity-80">({products.length})</span>
+                <span className="mr-1 text-[9.5px] opacity-85 font-mono">({products.length})</span>
               </button>
 
               {productLists.map((list) => {
@@ -1223,15 +1305,15 @@ export default function App() {
                       setActiveListId(list.id);
                       setActiveCategory('all');
                     }}
-                    className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                    className={`relative px-3 py-1.5 text-[11px] font-extrabold rounded-lg whitespace-nowrap flex items-center gap-1.5 cursor-pointer select-none active:scale-95 transition-all duration-150 ${
                       isSelected
-                        ? 'bg-[#2A261A] text-[#F3E5AB] border border-[#D4AF37] shadow-sm'
+                        ? 'gold-gradient-bg text-black shadow-[0_0_15px_rgba(212,175,55,0.35)] font-black'
                         : 'bg-[#181822] text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700'
                     }`}
                   >
                     <span>{list.name}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'bg-black/60 text-neutral-400'
+                    <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-mono ${
+                      isSelected ? 'bg-black/25 text-black font-extrabold' : 'bg-black/60 text-neutral-400'
                     }`}>
                       {count}
                     </span>
@@ -1241,86 +1323,107 @@ export default function App() {
             </div>
 
             {/* Active List description card */}
-            {activeListId !== 'all' && (() => {
-              const activeList = productLists.find((l) => l.id === activeListId);
-              if (!activeList) return null;
-              return (
-                <div className="p-3 rounded-xl bg-gradient-to-r from-[#1E1B12] via-[#161510] to-[#121218] border border-[#D4AF37]/35 flex items-center justify-between text-xs">
-                  <div>
-                    <h3 className="font-bold text-white flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      <span>قائمة: {activeList.name}</span>
-                    </h3>
-                    {activeList.description && (
-                      <p className="text-neutral-400 text-xs mt-0.5">{activeList.description}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveListId('all');
-                      setActiveCategory('all');
-                    }}
-                    className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-black/40 cursor-pointer"
-                    title="الرجوع لكافة المعروضات"
+            <AnimatePresence>
+              {activeListId !== 'all' && (() => {
+                const activeList = productLists.find((l) => l.id === activeListId);
+                if (!activeList) return null;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="p-2.5 rounded-xl bg-gradient-to-r from-[#1E1B12] via-[#161510] to-[#121218] border border-[#D4AF37]/40 flex items-center justify-between text-[11px] shadow-sm overflow-hidden"
                   >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })()}
-          </div>
+                    <div>
+                      <h3 className="font-extrabold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                        <span>قائمة: {activeList.name}</span>
+                      </h3>
+                      {activeList.description && (
+                        <p className="text-neutral-300 text-[10px] mt-0.5">{activeList.description}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveListId('all');
+                        setActiveCategory('all');
+                      }}
+                      className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-black/40 cursor-pointer"
+                      title="الرجوع لكافة المعروضات"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </motion.div>
+                );
+              })()}
+            </AnimatePresence>
+          </motion.div>
         )}
 
-        {/* Dynamic Category Filter Controls & Search (Visible if products exist) */}
+        {/* Dynamic Category Filter Controls & Search Studio Box (Compact) */}
         {products.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+            className="relative z-10 bg-[#111118]/95 border border-neutral-800/90 rounded-2xl p-2.5 sm:p-3.5 shadow-lg"
+          >
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-2.5">
               
               {/* Category Filter Tabs */}
-              {dynamicCategories.length > 1 && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-bold px-1">
-                    <Tag className="w-3.5 h-3.5 text-[#D4AF37]" />
+              {dynamicCategories.length > 1 ? (
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#F3E5AB] font-bold px-0.5">
+                    <Tag className="w-3 h-3 text-[#D4AF37]" />
                     <span>
                       {activeListId !== 'all' ? 'الأقسام التابعة لهذه القائمة:' : 'تصفح حسب القسم:'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 p-1 bg-[#121217] rounded-xl border border-neutral-800/80 overflow-x-auto scrollbar-thin">
-                    {dynamicCategories.map((cat) => (
-                      <button
-                        key={cat.id}
-                        onClick={() => setActiveCategory(cat.id)}
-                        className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
-                          activeCategory === cat.id
-                            ? 'bg-[#22222B] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                            : 'text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {cat.label}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1 p-1 bg-[#0C0C12] rounded-xl border border-neutral-800/90 overflow-x-auto scrollbar-thin">
+                    {dynamicCategories.map((cat) => {
+                      const isActive = activeCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setActiveCategory(cat.id)}
+                          className={`relative px-3 py-1.5 text-[11px] font-bold rounded-lg whitespace-nowrap cursor-pointer select-none active:scale-95 transition-all duration-150 ${
+                            isActive
+                              ? 'bg-[#222230] text-[#F3E5AB] border border-[#D4AF37]/60 shadow-[0_0_12px_rgba(212,175,55,0.22)]'
+                              : 'bg-transparent text-neutral-400 hover:text-white border border-transparent hover:bg-neutral-800/40'
+                          }`}
+                        >
+                          <span>{cat.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
+              ) : (
+                <div className="text-[11px] sm:text-xs font-bold text-[#F3E5AB] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>إجمالي المعروضات المتاحة ({filteredProducts.length} منتج)</span>
                 </div>
               )}
 
-              {/* Search and Sort */}
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1 sm:w-64">
+              {/* Search and Sort Controls */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <div className="relative flex-1 sm:w-56">
                   <input
                     type="text"
-                    placeholder="ابحث في معروضات المتجر..."
+                    placeholder="ابحث عن اسم أو مواصفات منتج..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pr-9 pl-4 py-2 text-xs bg-[#121217] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-white placeholder-neutral-500 outline-none transition-colors text-right"
+                    className="w-full pr-8 pl-7 py-1.5 sm:py-2 text-xs bg-[#0C0C12] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-white placeholder-neutral-500 outline-none transition-colors text-right"
                   />
-                  <Search className="w-4 h-4 text-neutral-500 absolute right-3 top-2.5 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-[#D4AF37]/70 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-white"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5 cursor-pointer"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
@@ -1328,7 +1431,7 @@ export default function App() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 text-xs bg-[#121217] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-neutral-300 outline-none"
+                  className="px-3 py-1.5 sm:py-2 text-xs font-semibold bg-[#0C0C12] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-neutral-200 outline-none cursor-pointer transition-colors"
                 >
                   <option value="featured">الترتيب الافتراضي</option>
                   <option value="price-asc">السعر: من الأقل للأعلى</option>
@@ -1337,18 +1440,25 @@ export default function App() {
               </div>
 
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Product Grid / Clean Store Waiting State */}
         {filteredProducts.length === 0 ? (
-          <div className="py-20 px-6 text-center space-y-4 bg-[#111116] rounded-2xl border border-neutral-800">
-            <div className="w-16 h-16 rounded-full bg-[#181822] border border-[#D4AF37]/30 flex items-center justify-center mx-auto text-[#D4AF37]">
-              <Package className="w-8 h-8" />
+          <motion.div
+            key="empty-state"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.22 }}
+            style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
+            className="relative z-10 py-12 px-5 text-center space-y-3 bg-[#111116] rounded-2xl border border-neutral-800 shadow-lg"
+          >
+            <div className="w-13 h-13 rounded-2xl bg-[#181822] border border-[#D4AF37]/30 flex items-center justify-center mx-auto text-[#D4AF37] animate-luxury-float">
+              <Package className="w-6 h-6" />
             </div>
             
-            <div className="max-w-md mx-auto space-y-2">
-              <h3 className="text-lg font-bold text-white">
+            <div className="max-w-md mx-auto space-y-1.5">
+              <h3 className="text-base font-bold text-white">
                 {products.length === 0 ? 'المتجر قيد التجهيز والتحديث' : 'لا توجد منتجات مطابقة لهذا البحث'}
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed">
@@ -1358,34 +1468,46 @@ export default function App() {
               </p>
             </div>
 
-            <div className="pt-2 flex flex-wrap justify-center gap-3 text-xs text-neutral-400">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#16161F] border border-neutral-800">
-                <Clock className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <div className="pt-1 flex flex-wrap justify-center gap-2 text-[11px] text-neutral-400">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#16161F] border border-neutral-800">
+                <Clock className="w-3 h-3 text-[#D4AF37]" />
                 <span>إطلاق دفعات جديدة قريباً</span>
               </span>
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#16161F] border border-neutral-800">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#16161F] border border-neutral-800">
+                <ShieldCheck className="w-3 h-3 text-[#D4AF37]" />
                 <span>توصيل ودفع كاش عند الاستلام</span>
               </span>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                currency={currency}
-                onQuickView={(p) => setSelectedProduct(p)}
-                onAddToCart={(p) => handleAddToCart(p, 1)}
-                onBuyNow={(p) => handleBuyNow(p, 1)}
-              />
-            ))}
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-4">
+              {filteredProducts.map((product, idx) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  index={idx}
+                  currency={currency}
+                  freeShippingConfig={freeShippingConfig}
+                  onQuickView={(p) => setSelectedProduct(p)}
+                  onAddToCart={(p) => handleAddToCart(p, 1)}
+                  onBuyNow={(p) => handleBuyNow(p, 1)}
+                  onOpenZoom={(images, initialIndex, title) => {
+                    setLightboxState({
+                      isOpen: true,
+                      images,
+                      initialIndex,
+                      title
+                    });
+                  }}
+                />
+              ))}
           </div>
         )}
 
         {/* PWA App Installation Feature Banner */}
-        <PWAInstallButton variant="banner" onToast={showToast} />
+        <div className="relative z-10">
+          <PWAInstallButton variant="banner" onToast={showToast} />
+        </div>
 
       </main>
 
@@ -1401,10 +1523,11 @@ export default function App() {
       <ProductDetailModal
         product={selectedProduct}
         currency={currency}
+        freeShippingConfig={freeShippingConfig}
+        isCovered={Boolean(isCheckoutOpen || isAuthOpen)}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={(p, qty, size) => handleAddToCart(p, qty, size)}
         onBuyNow={(p, qty, size) => {
-          setSelectedProduct(null);
           handleBuyNow(p, qty, size);
         }}
         onOpenZoom={(images, initialIndex, title) => {
@@ -1438,6 +1561,7 @@ export default function App() {
         items={cart}
         user={user}
         currency={currency}
+        freeShippingConfig={freeShippingConfig}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onProceedToCheckout={handleProceedToCheckoutFromCart}
@@ -1449,16 +1573,15 @@ export default function App() {
         }}
       />
 
-      {user && (
-        <CheckoutModal
-          isOpen={isCheckoutOpen}
-          onClose={() => setIsCheckoutOpen(false)}
-          items={cart}
-          user={user}
-          currency={currency}
-          onOrderPlaced={handleOrderPlaced}
-        />
-      )}
+      <CheckoutModal
+        isOpen={Boolean(user && isCheckoutOpen)}
+        onClose={() => setIsCheckoutOpen(false)}
+        items={cart}
+        user={user}
+        currency={currency}
+        freeShippingConfig={freeShippingConfig}
+        onOrderPlaced={handleOrderPlaced}
+      />
 
       <OrderSuccessModal
         isOpen={isOrderSuccessOpen}
@@ -1501,6 +1624,8 @@ export default function App() {
         isAdmin={false}
       />
 
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

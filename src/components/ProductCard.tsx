@@ -1,23 +1,30 @@
 import React, { useState } from 'react';
-import { Eye, ShoppingBag, Zap, Banknote, Maximize2 } from 'lucide-react';
-import { Product } from '../types';
+import { motion } from 'framer-motion';
+import { Eye, ShoppingBag, Zap, Maximize2, Images } from 'lucide-react';
+import { Product, FreeShippingConfig } from '../types';
 import { formatPrice } from '../utils/formatters';
 import { ImageLightboxModal } from './ImageLightboxModal';
 
 interface ProductCardProps {
   product: Product;
   currency: 'USD' | 'IQD';
+  freeShippingConfig?: FreeShippingConfig;
+  index?: number;
   onQuickView: (product: Product) => void;
   onAddToCart: (product: Product) => void;
   onBuyNow: (product: Product) => void;
+  onOpenZoom?: (images: string[], initialIndex: number, title: string) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   currency,
+  freeShippingConfig,
+  index = 0,
   onQuickView,
   onAddToCart,
-  onBuyNow
+  onBuyNow,
+  onOpenZoom
 }) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
@@ -25,121 +32,152 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ? product.images 
     : [product.image];
 
+  const isFreeShippingPromoActive = Boolean(freeShippingConfig?.enabled && (freeShippingConfig?.minOrderAmountIQD || 0) > 0);
+
+  const handleOpenLightbox = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenZoom) {
+      onOpenZoom(imagesList, 0, product.name);
+    } else {
+      setIsLightboxOpen(true);
+    }
+  };
+
   return (
     <>
-      <div 
+      <motion.div
+        initial={{ opacity: 0, y: 14, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        whileHover={{ y: -4, transition: { type: 'spring', stiffness: 380, damping: 24 } }}
+        transition={{
+          type: 'spring',
+          stiffness: 280,
+          damping: 24,
+          delay: Math.min(index * 0.015, 0.08)
+        }}
         onClick={() => onQuickView(product)}
-        className="group relative flex flex-col bg-[#111114]/90 backdrop-blur-[2px] rounded-xl border border-[#D4AF37]/30 hover:border-[#D4AF37] transition-all duration-300 ios-card-hover overflow-hidden cursor-pointer product-card-contain shadow-lg hover:shadow-[0_0_25px_rgba(212,175,55,0.2)]"
+        className="group relative flex flex-col bg-[#111117] rounded-2xl border border-[#D4AF37]/25 hover:border-[#D4AF37] transition-colors duration-300 overflow-hidden cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.65)] hover:shadow-[0_14px_30px_rgba(212,175,55,0.20)]"
       >
-        
-        {/* Product Image Stage */}
-        <div className="relative w-full aspect-[4/3] bg-[#0A0A0C] overflow-hidden flex items-center justify-center p-2">
+        {/* Product Image Stage (Compact & Proportional) */}
+        <div className="relative w-full aspect-[4/3] max-h-[185px] sm:max-h-[200px] bg-gradient-to-b from-[#0C0C11] to-[#08080B] overflow-hidden flex items-center justify-center p-2.5">
           <img
             src={product.image}
             alt={product.name}
-            referrerPolicy="no-referrer"
             loading="lazy"
-            decoding="async"
-            className="w-full h-full object-contain object-center transition-transform duration-500 group-hover:scale-105"
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-contain object-center transition-transform duration-700 ease-out group-hover:scale-106 drop-shadow-[0_6px_16px_rgba(0,0,0,0.85)]"
           />
           
-          <div className="absolute inset-0 bg-gradient-to-t from-[#111114]/40 via-transparent to-black/20 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#111117]/55 via-transparent to-black/15 pointer-events-none" />
 
-          {/* Quiet Top Kicker */}
-          <div className="absolute top-3 right-3 text-[11px] font-medium tracking-wide text-[#F3E5AB] bg-black/75 backdrop-blur-md px-2.5 py-1 rounded border border-[#D4AF37]/30">
+          {/* Top-Right Category Label */}
+          <div className="absolute top-2.5 right-2.5 text-[10px] font-bold tracking-wide text-[#F3E5AB] bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md border border-[#D4AF37]/35 shadow-xs">
             {product.categoryLabel}
           </div>
+
+          {/* Multi-image badge if product has multiple photos */}
+          {imagesList.length > 1 && (
+            <div className="absolute bottom-2 right-2.5 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-neutral-700/80 text-[9.5px] font-mono text-[#F3E5AB]">
+              <Images className="w-2.5 h-2.5 text-[#D4AF37]" />
+              <span>{imagesList.length} صور</span>
+            </div>
+          )}
 
           {/* Fullscreen image icon button */}
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsLightboxOpen(true);
-            }}
-            className="absolute top-3 left-3 z-10 p-1.5 rounded-lg bg-black/80 hover:bg-[#D4AF37] text-white hover:text-black border border-neutral-700 transition-all shadow-md active:scale-90"
+            onClick={handleOpenLightbox}
+            className="absolute top-2.5 left-2.5 z-10 p-1.5 rounded-lg bg-black/75 hover:bg-[#D4AF37] text-white hover:text-black border border-neutral-700/80 hover:border-[#D4AF37] transition-all backdrop-blur-md shadow-sm active:scale-90 cursor-pointer"
             title="توسيع ومعاينة الصورة كاملة"
           >
-            <Maximize2 className="w-3.5 h-3.5" />
+            <Maximize2 className="w-3 h-3" />
           </button>
 
-          {/* Quick View Button on Hover (Only on Desktop md: screens to prevent touch delay/lag on mobile) */}
-          <div className="absolute inset-0 hidden md:flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
-            <button
+          {/* Quick View Overlay on Desktop Hover */}
+          <div className="absolute inset-0 hidden md:flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/50 backdrop-blur-[1.5px]">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onQuickView(product);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black gold-gradient-bg rounded-md hover:brightness-110 transition-all shadow-lg"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-extrabold text-black gold-gradient-bg rounded-lg hover:brightness-110 transition-all shadow-md cursor-pointer"
             >
-              <Eye className="w-3.5 h-3.5 fill-black" />
-              <span>تفاصيل المنتج والوصف</span>
-            </button>
+              <Eye className="w-3 h-3 fill-black" />
+              <span>تفاصيل المنتج</span>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsLightboxOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-black/80 border border-[#D4AF37] rounded-md hover:bg-[#D4AF37] hover:text-black transition-all"
+              onClick={handleOpenLightbox}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-white bg-black/85 border border-[#D4AF37] rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all cursor-pointer"
               title="توسيع الصورة"
             >
-              <Maximize2 className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>الصورة كاملة</span>
-            </button>
+              <Maximize2 className="w-3 h-3 text-[#D4AF37]" />
+              <span>تكبير</span>
+            </motion.button>
           </div>
         </div>
 
-        {/* Product Details Section */}
-        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+        {/* Product Details Section (Compact & Sleek) */}
+        <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
           
-          <div className="space-y-2 text-right min-w-0 w-full">
-            {/* Metadata Row: Category */}
-            <div className="flex items-center justify-between text-xs text-neutral-400 gap-2 min-w-0">
-              <span className="text-[11px] text-[#F3E5AB] font-medium bg-[#1A1A22] px-2 py-0.5 rounded border border-[#D4AF37]/25 truncate shrink-0">
+          <div className="space-y-1 text-right min-w-0 w-full">
+            {/* Metadata Row: Category & Availability */}
+            <div className="flex items-center justify-between text-[10px] text-neutral-400 gap-2 min-w-0">
+              <span className="truncate">
                 {product.categoryLabel}
               </span>
-              <span className="text-[10px] text-emerald-400 font-medium shrink-0">
-                متاح للتسليم
+              <span className="text-[9.5px] text-emerald-400 font-semibold shrink-0 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                <span>متوفر</span>
               </span>
             </div>
 
             {/* Product Title */}
             <h3 
-              className="text-base font-bold text-white group-hover:text-[#F3E5AB] transition-colors line-clamp-2 leading-snug break-words min-w-0"
+              className="text-sm sm:text-[15px] font-extrabold text-white group-hover:text-[#F3E5AB] transition-colors line-clamp-1 leading-snug break-words min-w-0"
               title={product.name}
             >
               {product.name}
             </h3>
 
-            {/* Short Description (Only render if not identical to name) */}
+            {/* Short Description */}
             {product.shortDesc && product.shortDesc.trim() !== product.name.trim() && (
-              <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed break-words min-w-0">
+              <p className="text-[11px] text-neutral-400 line-clamp-1 leading-relaxed break-words min-w-0">
                 {product.shortDesc}
               </p>
             )}
           </div>
 
           {/* Pricing & Actions */}
-          <div className="pt-3 border-t border-neutral-800/80 space-y-2.5">
-            {/* Delivery notice above price in fine font */}
-            <div className="text-[10px] text-[#D4AF37]/90 font-medium flex items-center justify-between">
-              <span>سعر التوصيل 5,000 د.ع</span>
-              <span className="text-[9px] text-neutral-400">كافة المحافظات</span>
+          <div className="pt-2 border-t border-neutral-800/80 space-y-2">
+            {/* Compact Delivery notice above price */}
+            <div className="text-[9.5px] text-[#D4AF37]/95 font-medium flex items-center justify-between bg-[#161620] px-2 py-1 rounded-md border border-neutral-800/90">
+              <span>التوصيل: 5,000 د.ع</span>
+              {isFreeShippingPromoActive ? (
+                <span className="text-[9px] text-emerald-400 font-bold">
+                  مجاني فوق {formatPrice(freeShippingConfig?.minOrderAmountIQD, 'IQD')}
+                </span>
+              ) : (
+                <span className="text-[9px] text-neutral-400">كافة المحافظات</span>
+              )}
             </div>
 
             {/* Price display */}
             <div className="flex items-baseline justify-between">
-              <span className="text-xs text-neutral-400 font-medium">السعر:</span>
-              <div className="flex items-baseline gap-2">
+              <span className="text-[11px] text-neutral-400 font-semibold">السعر:</span>
+              <div className="flex items-baseline gap-1.5">
                 {product.originalPriceUSD && (
-                  <span className="text-xs text-neutral-500 line-through tabular-nums">
+                  <span className="text-[11px] text-neutral-500 line-through tabular-nums font-mono">
                     {formatPrice(product.originalPriceUSD, currency)}
                   </span>
                 )}
-                <span className="text-lg font-bold text-[#F3E5AB] gold-gradient-text tabular-nums">
+                <span className="text-base sm:text-lg font-extrabold text-[#F3E5AB] gold-gradient-text tabular-nums font-mono">
                   {formatPrice(product.priceUSD, currency)}
                 </span>
               </div>
@@ -147,24 +185,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
             {/* Sizes badges preview if product has sizes */}
             {product.sizes && product.sizes.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                <span className="text-[10px] text-neutral-400">القياسات:</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[9.5px] text-neutral-400">القياسات:</span>
                 <div className="flex items-center gap-1 flex-wrap">
                   {product.sizes.slice(0, 5).map((s) => (
-                    <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-[#181824] text-[#F3E5AB] border border-[#D4AF37]/30 font-medium">
+                    <span key={s} className="text-[9.5px] px-1.5 py-0.2 rounded bg-[#181824] text-[#F3E5AB] border border-[#D4AF37]/30 font-bold">
                       {s}
                     </span>
                   ))}
                   {product.sizes.length > 5 && (
-                    <span className="text-[10px] text-[#D4AF37] font-bold">+{product.sizes.length - 5}</span>
+                    <span className="text-[9.5px] text-[#D4AF37] font-bold">+{product.sizes.length - 5}</span>
                   )}
                 </div>
               </div>
             )}
 
             {/* Action Buttons: Add to Cart & Buy Now */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
+            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -174,14 +213,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     onAddToCart(product);
                   }
                 }}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-[#F3E5AB] bg-[#16161B] border border-[#D4AF37]/30 hover:border-[#D4AF37] hover:bg-[#1C1C22] rounded-lg transition-all active:scale-95"
+                className="w-full flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-bold text-[#F3E5AB] bg-[#171722] border border-[#D4AF37]/35 hover:border-[#D4AF37] hover:bg-[#1E1E2C] rounded-lg transition-colors cursor-pointer"
                 title="إضافة إلى حقيبة التسوق"
               >
-                <ShoppingBag className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>{product.sizes && product.sizes.length > 0 ? 'اختر القياس' : 'إضافة للسلة'}</span>
-              </button>
+                <ShoppingBag className="w-3 h-3 text-[#D4AF37] shrink-0" />
+                <span className="truncate">{product.sizes && product.sizes.length > 0 ? 'اختر القياس' : 'إضافة للسلة'}</span>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -191,25 +231,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     onBuyNow(product);
                   }
                 }}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold text-black gold-gradient-bg hover:brightness-110 rounded-lg transition-all active:scale-95 shadow-[0_0_12px_rgba(212,175,55,0.2)]"
+                className="w-full flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-extrabold text-black gold-gradient-bg hover:brightness-110 rounded-lg transition-all shadow-[0_0_12px_rgba(212,175,55,0.22)] cursor-pointer"
                 title="طلب فوري كاش"
               >
-                <Zap className="w-3.5 h-3.5 fill-black" />
-                <span>{product.sizes && product.sizes.length > 0 ? 'اختر القياس واطلب' : 'شراء الآن (كاش)'}</span>
-              </button>
+                <Zap className="w-3 h-3 fill-black shrink-0" />
+                <span className="truncate">{product.sizes && product.sizes.length > 0 ? 'اختر واطلب' : 'شراء الآن'}</span>
+              </motion.button>
             </div>
           </div>
 
         </div>
+      </motion.div>
 
-      </div>
-
-      <ImageLightboxModal
-        isOpen={isLightboxOpen}
-        images={imagesList}
-        title={product.name}
-        onClose={() => setIsLightboxOpen(false)}
-      />
+      {!onOpenZoom && (
+        <ImageLightboxModal
+          isOpen={isLightboxOpen}
+          images={imagesList}
+          title={product.name}
+          onClose={() => setIsLightboxOpen(false)}
+        />
+      )}
     </>
   );
 };

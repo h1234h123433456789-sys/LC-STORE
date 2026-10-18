@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingBag, 
   User as UserIcon, 
@@ -7,9 +8,7 @@ import {
   ChevronDown, 
   Package, 
   Smartphone, 
-  Sparkles,
-  ShieldCheck,
-  CheckCircle2
+  Sparkles
 } from 'lucide-react';
 import { User } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -72,8 +71,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#080809]/92 border-b border-[#D4AF37]/15 transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 sm:h-20 flex items-center justify-between">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#080809]/92 border-b border-[#D4AF37]/15">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
         
         {/* 1. Brand Wordmark (Right in RTL) */}
         <div className="flex items-center gap-6">
@@ -83,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="text-2xl sm:text-3xl md:text-4xl font-brand font-bold tracking-widest gold-gradient-text transition-transform hover:scale-105 active:scale-95"
+            className="text-2xl sm:text-3xl font-brand font-bold tracking-widest gold-gradient-text transition-transform hover:scale-105 active:scale-95"
             aria-label="LC Store"
           >
             LC
@@ -91,27 +90,31 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* 2. Desktop Navigation Links (Center) */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+        <nav className="hidden md:flex items-center gap-7 text-xs sm:text-sm font-medium">
           <a
             href="#"
             onClick={(e) => {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="text-[#F3E5AB] font-semibold hover:text-white transition-colors"
+            className="relative py-1 text-[#F3E5AB] font-semibold hover:text-white transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-full after:h-[2px] after:bg-[#D4AF37] after:rounded-full"
           >
             الرئيسية
           </a>
           <a
             href="#catalog"
-            className="text-neutral-400 hover:text-[#F3E5AB] transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="relative py-1 text-neutral-400 hover:text-[#F3E5AB] transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-0 hover:after:w-full after:h-[2px] after:bg-[#D4AF37]/70 after:transition-all after:duration-300"
           >
             معروضات المتجر
           </a>
         </nav>
 
         {/* 3. Primary Actions (Left in RTL): Clean, Spaced, Uncluttered */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2">
           
           {/* App Install Button (Visible on tablet/desktop, compact) */}
           <div className="hidden sm:block">
@@ -120,150 +123,176 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Notification Bell Button */}
           {onOpenNotifications && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               type="button"
               onClick={onOpenNotifications}
               aria-label="التنبيهات والإشعارات"
-              className="relative p-2.5 rounded-xl bg-[#13131A] border border-neutral-800 hover:border-[#D4AF37]/60 text-neutral-300 hover:text-[#F3E5AB] active:scale-95 transition-all cursor-pointer shadow-sm"
+              className="relative p-2 rounded-xl bg-[#13131A] border border-neutral-800 hover:border-[#D4AF37]/60 text-neutral-300 hover:text-[#F3E5AB] transition-colors cursor-pointer shadow-xs"
               title="مركز الإشعارات والتنبيهات"
             >
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+              <Bell className="w-4 h-4" />
               {unreadNotificationsCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center text-[9px] font-bold text-black gold-gradient-bg rounded-full shadow-md animate-pulse">
                   {unreadNotificationsCount}
                 </span>
               )}
-            </button>
+            </motion.button>
           )}
 
           {/* User Account / Profile Dropdown Menu */}
           {user ? (
             <div className="relative" ref={userMenuRef}>
-              <button
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#F3E5AB] bg-[#14141C] border border-[#D4AF37]/50 hover:border-[#D4AF37] rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-[#F3E5AB] bg-[#14141C] border border-[#D4AF37]/50 hover:border-[#D4AF37] rounded-xl transition-colors shadow-xs cursor-pointer"
                 title="الملف الشخصي والخيارات"
               >
                 <div className="w-4 h-4 rounded-full bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37]">
                   <UserIcon className="w-3 h-3" />
                 </div>
-                <span className="max-w-[70px] sm:max-w-[100px] truncate font-bold">
+                <span className="max-w-[65px] sm:max-w-[95px] truncate font-bold text-[11px] sm:text-xs">
                   {user.name ? user.name.split(' ')[0] : 'ملفي'}
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-[#D4AF37] transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#D4AF37] transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              </motion.button>
 
               {/* Floating Luxury User Menu Dropdown */}
-              {isUserMenuOpen && (
-                <div 
-                  dir="rtl"
-                  className="absolute left-0 mt-2 w-56 rounded-2xl bg-[#111117] border border-[#D4AF37]/40 shadow-[0_15px_50px_rgba(0,0,0,0.95)] p-2 z-50 animate-ios-slide-up text-right space-y-1 backdrop-blur-xl"
-                >
-                  {/* User Info Header */}
-                  <div className="p-2.5 rounded-xl bg-[#181824] border border-neutral-800/80 mb-1 space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-[#D4AF37]" />
-                      <span className="text-xs font-bold text-white truncate">{user.name}</span>
-                    </div>
-                    {user.phone && (
-                      <p className="text-[11px] text-neutral-400 font-mono" dir="ltr">
-                        {user.phone}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Orders Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onOpenMyOrders();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-neutral-200 hover:text-white hover:bg-[#1A1A26] rounded-xl transition-colors cursor-pointer text-right"
+              <AnimatePresence>
+                {isUserMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                    dir="rtl"
+                    className="absolute left-0 mt-2 w-56 rounded-2xl bg-[#111118] border border-[#D4AF37]/45 shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-2 z-50 text-right space-y-1"
                   >
-                    <Package className="w-4 h-4 text-[#D4AF37]" />
-                    <span>طلباتي السابقة وتتبع الشحن</span>
-                  </button>
+                    {/* User Info Header */}
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#1A1A28] to-[#14141E] border border-[#D4AF37]/25 mb-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                        <span className="text-xs font-extrabold text-white truncate">{user.name}</span>
+                      </div>
+                      {user.phone && (
+                        <p className="text-[10px] text-[#F3E5AB] font-mono" dir="ltr">
+                          {user.phone}
+                        </p>
+                      )}
+                    </div>
 
-                  {/* Notifications Center Button */}
-                  {onOpenNotifications && (
+                    {/* Orders Button */}
                     <button
                       type="button"
                       onClick={() => {
                         setIsUserMenuOpen(false);
-                        onOpenNotifications();
+                        onOpenMyOrders();
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium text-neutral-200 hover:text-white hover:bg-[#1A1A26] rounded-xl transition-colors cursor-pointer text-right"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-[#1B1B28] rounded-xl transition-colors cursor-pointer text-right"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Bell className="w-4 h-4 text-[#D4AF37]" />
-                        <span>مركز الإشعارات والتنبيهات</span>
-                      </div>
-                      {unreadNotificationsCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#D4AF37] text-black font-bold">
-                          {unreadNotificationsCount}
-                        </span>
-                      )}
+                      <Package className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>طلباتي السابقة وتتبع الشحن</span>
                     </button>
-                  )}
 
-                  {/* Install PWA Option (if on mobile or not installed) */}
-                  {!isInstalled && (
+                    {/* Notifications Center Button */}
+                    {onOpenNotifications && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenNotifications();
+                        }}
+                        className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-[#1B1B28] rounded-xl transition-colors cursor-pointer text-right"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
+                          <span>مركز الإشعارات والتنبيهات</span>
+                        </div>
+                        {unreadNotificationsCount > 0 && (
+                          <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#D4AF37] text-black font-bold">
+                            {unreadNotificationsCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Install PWA Option */}
+                    {!isInstalled && (
+                      <button
+                        type="button"
+                        onClick={handleInstallClick}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-[#F3E5AB] hover:bg-[#1E1B13] rounded-xl transition-colors cursor-pointer text-right border border-[#D4AF37]/20"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>تثبيت تطبيق المتجر على هاتفك</span>
+                      </button>
+                    )}
+
+                    <div className="h-[1px] bg-neutral-800/80 my-1" />
+
+                    {/* Logout Button */}
                     <button
                       type="button"
-                      onClick={handleInstallClick}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-[#F3E5AB] hover:bg-[#1E1B13] rounded-xl transition-colors cursor-pointer text-right border border-[#D4AF37]/20"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded-xl transition-colors cursor-pointer text-right"
                     >
-                      <Smartphone className="w-4 h-4 text-[#D4AF37]" />
-                      <span>تثبيت تطبيق المتجر على هاتفك</span>
+                      <LogOut className="w-3.5 h-3.5 text-red-400" />
+                      <span>تسجيل الخروج من الحساب</span>
                     </button>
-                  )}
-
-                  <div className="h-[1px] bg-neutral-800/80 my-1" />
-
-                  {/* Logout Button (Safely and cleanly nested inside menu!) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onLogout();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded-xl transition-colors cursor-pointer text-right"
-                  >
-                    <LogOut className="w-4 h-4 text-red-400" />
-                    <span>تسجيل الخروج من الحساب</span>
-                  </button>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               type="button"
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-200 bg-[#14141C] border border-neutral-700 hover:border-[#D4AF37] rounded-xl hover:text-[#F3E5AB] transition-all active:scale-95 shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] sm:text-xs font-bold text-neutral-200 bg-[#14141C] border border-neutral-700 hover:border-[#D4AF37] rounded-xl hover:text-[#F3E5AB] transition-colors shadow-xs cursor-pointer"
               title="تسجيل الدخول / فتح الحساب"
             >
               <UserIcon className="w-3.5 h-3.5 text-[#D4AF37]" />
               <span className="hidden sm:inline">حسابي / تسجيل الدخول</span>
               <span className="sm:hidden font-bold">دخول</span>
-            </button>
+            </motion.button>
           )}
 
           {/* Shopping Bag Drawer Button */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.93 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             type="button"
             onClick={onOpenCart}
             aria-label="حقيبة التسوق"
-            className="relative p-2.5 rounded-xl bg-[#14141C] border border-[#D4AF37]/40 text-[#F3E5AB] hover:border-[#D4AF37] hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="relative p-2 rounded-xl bg-[#14141C] border border-[#D4AF37]/45 text-[#F3E5AB] hover:border-[#D4AF37] transition-colors cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.12)]"
           >
-            <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -left-1.5 w-5 h-5 flex items-center justify-center text-[10px] font-bold text-black gold-gradient-bg rounded-full shadow-md animate-ios-badge">
-                {cartCount}
-              </span>
-            )}
-          </button>
+            <ShoppingBag className="w-4 h-4 text-[#D4AF37]" />
+            <AnimatePresence>
+              {cartCount > 0 && (
+                <motion.span
+                  key={cartCount}
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 450, damping: 16 }}
+                  className="absolute -top-1.5 -left-1.5 w-4.5 h-4.5 flex items-center justify-center text-[9.5px] font-extrabold text-black gold-gradient-bg rounded-full shadow-md"
+                >
+                  {cartCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
 
         </div>
 

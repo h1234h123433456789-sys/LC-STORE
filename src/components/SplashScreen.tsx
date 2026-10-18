@@ -82,12 +82,12 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             <defs>
               {/* 24K Royal Gold Gradient */}
               <linearGradient id="splashGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#FFFFFF" />
-                <stop offset="15%" stop-color="#FFF8D6" />
-                <stop offset="35%" stop-color="#F7E7B4" />
-                <stop offset="60%" stop-color="#E5C158" />
-                <stop offset="85%" stop-color="#C29B27" />
-                <stop offset="100%" stop-color="#8F6A10" />
+                <stop offset="0%" stopColor="#FFFFFF" />
+                <stop offset="15%" stopColor="#FFF8D6" />
+                <stop offset="35%" stopColor="#F7E7B4" />
+                <stop offset="60%" stopColor="#E5C158" />
+                <stop offset="85%" stopColor="#C29B27" />
+                <stop offset="100%" stopColor="#8F6A10" />
               </linearGradient>
 
               {/* Golden Bloom Filter */}

@@ -1,7 +1,10 @@
-export function formatPrice(amount: number | undefined | null, _currency?: 'USD' | 'IQD' | string): string {
+export function toIQD(amount: number | undefined | null): number {
   const num = typeof amount === 'number' && !isNaN(amount) ? amount : Number(amount) || 0;
-  // If an old legacy item had USD values (<= 500), convert it using the standard 1320 rate
-  const iqdAmount = num > 0 && num <= 500 ? Math.round(num * 1320) : Math.round(num);
+  return num > 0 && num <= 500 ? Math.round(num * 1320) : Math.round(num);
+}
+
+export function formatPrice(amount: number | undefined | null, _currency?: 'USD' | 'IQD' | string): string {
+  const iqdAmount = toIQD(amount);
   try {
     return `${iqdAmount.toLocaleString('ar-IQ')} د.ع`;
   } catch {

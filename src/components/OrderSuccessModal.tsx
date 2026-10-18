@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, PackageCheck, MapPin, Phone, User as UserIcon, X, Sparkles, Truck, ArrowRight, BellRing } from 'lucide-react';
+import { CheckCircle2, PackageCheck, ArrowRight, BellRing, Truck } from 'lucide-react';
 import { Order } from '../types';
-import { formatPrice, formatDateTime } from '../utils/formatters';
+import { formatPrice, formatDateTime, toIQD } from '../utils/formatters';
 import { requestNotificationPermission, sendDeviceNotification } from '../lib/notifications';
 
 interface OrderSuccessModalProps {
@@ -20,21 +20,53 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 }) => {
   if (!order) return null;
 
+  const subtotalIQD = (order.items || []).reduce((sum, it) => {
+    return sum + toIQD(it.product?.priceUSD || 0) * (it.quantity || 1);
+  }, 0);
+  const isFreeShipping = Boolean(order.isFreeShipping || order.shippingUSD === 0);
+  const shippingFeeIQD = isFreeShipping ? 0 : 5000;
+  const grandTotalIQD = subtotalIQD + shippingFeeIQD;
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="fixed inset-0 z-[100] w-full h-[100dvh] bg-[#0A0A0E] flex flex-col overflow-hidden text-right"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="fixed inset-0 z-[120] w-full h-[100dvh] bg-[#07070A] flex flex-col overflow-hidden text-right"
         >
+          {/* Dynamic High-Visibility Luxury Gold Ambient Lighting */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
+            <div 
+              className="absolute inset-0" 
+              style={{
+                background: `
+                  radial-gradient(ellipse 85% 50% at 50% 0%, rgba(212,175,55,0.22) 0%, transparent 70%),
+                  radial-gradient(ellipse 75% 50% at 50% 100%, rgba(185,135,28,0.18) 0%, transparent 72%)
+                `
+              }}
+            />
+            <div 
+              className="absolute -top-32 -right-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-1" 
+              style={{ 
+                background: 'radial-gradient(circle, rgba(255,215,65,0.28) 0%, rgba(212,175,55,0.14) 35%, rgba(212,175,55,0.04) 58%, transparent 75%)'
+              }} 
+            />
+            <div 
+              className="absolute -bottom-32 -left-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-2" 
+              style={{ 
+                background: 'radial-gradient(circle, rgba(245,195,45,0.24) 0%, rgba(212,175,55,0.11) 38%, rgba(212,175,55,0.03) 60%, transparent 75%)'
+              }} 
+            />
+          </div>
+
           {/* Top Header */}
-          <header className="sticky top-0 z-30 w-full bg-[#111116]/95 backdrop-blur-md border-b border-neutral-800/90 px-4 sm:px-8 py-3.5 flex items-center justify-between shrink-0 shadow-md">
+          <header className="sticky top-0 z-30 w-full bg-[#0F0F15] border-b border-[#D4AF37]/20 px-4 sm:px-8 py-3 flex items-center justify-between shrink-0 shadow-md">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1C1C26] hover:bg-[#252533] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#181822] hover:bg-[#222230] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95"
             >
               <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
               <span>العودة للمتجر</span>
@@ -45,25 +77,35 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             </span>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex items-center justify-center">
-            <div className="relative w-full max-w-lg bg-[#111116] border border-[#D4AF37]/60 rounded-3xl shadow-[0_0_80px_rgba(212,175,55,0.25)] p-6 sm:p-8 text-right">
-              
+          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex items-center justify-center relative z-10">
+            <motion.div
+              initial={{ scale: 0.94, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+              className="relative w-full max-w-lg bg-[#101017] border border-[#D4AF37]/50 rounded-2xl shadow-2xl p-6 sm:p-8 text-right"
+            >
               {/* Success Icon Badge */}
               <div className="text-center space-y-3 mb-6">
-                <div className="w-16 h-16 bg-[#181824] border-2 border-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto text-[#D4AF37] shadow-[0_0_30px_rgba(212,175,55,0.3)]">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.15, type: 'spring', stiffness: 300, damping: 16 }}
+                  className="w-16 h-16 bg-[#181824] border-2 border-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto text-[#D4AF37] shadow-[0_0_30px_rgba(212,175,55,0.3)]"
+                >
                   <CheckCircle2 className="w-9 h-9" />
-                </div>
-                <h3 className="text-xl font-extrabold text-white">تم استلام وتمويل طلبك بنجاح!</h3>
+                </motion.div>
+                <h3 className="text-xl font-extrabold text-white">تم تسجيل طلبك بنجاح!</h3>
                 <p className="text-xs text-[#F3E5AB]">
-                  شكراً لتسوقك من متجر LC. سيتم التواصل معك قريباً لتوصيل الشحنة.
+                  شكراً لتسوقك من متجر LC. سيتم التواصل معك قريباً لتأكيد وتوصيل الشحنة.
                 </p>
               </div>
 
               {/* Details */}
               <div className="bg-[#15151E] p-4 rounded-2xl border border-neutral-800 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                  <span className="text-neutral-400">رقم المرجعية:</span>
-                  <span className="font-mono text-white font-bold">#{order.id.slice(0, 8).toUpperCase()}</span>
+                  <span className="text-neutral-400">رقم الطلب:</span>
+                  <span className="font-mono text-[#F3E5AB] font-bold dir-ltr">#{order.orderNumber}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
                   <span className="text-neutral-400">تاريخ الطلب:</span>
@@ -95,10 +137,23 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                   <span className="text-neutral-400">عنوان التوصيل:</span>
                   <span className="text-neutral-300">{order.customer.city} - {order.customer.address}</span>
                 </div>
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                  <span className="text-neutral-400 flex items-center gap-1">
+                    <Truck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>كلفة التوصيل:</span>
+                  </span>
+                  {isFreeShipping ? (
+                    <span className="text-emerald-300 font-bold bg-emerald-950/90 border border-emerald-500/50 px-2 py-0.5 rounded-md text-[11px]">
+                      مجاني 🎉
+                    </span>
+                  ) : (
+                    <span className="text-[#F3E5AB] font-mono font-bold">5,000 د.ع</span>
+                  )}
+                </div>
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-neutral-300 font-bold">الإجمالي كاش:</span>
-                  <span className="text-lg font-bold gold-gradient-text font-mono">
-                    {formatPrice(order.totalUSD, order.currency)}
+                  <span className="text-neutral-300 font-bold">المجموع الكلي النهائي (كاش):</span>
+                  <span className="text-lg font-extrabold gold-gradient-text font-mono">
+                    {formatPrice(grandTotalIQD, 'IQD')}
                   </span>
                 </div>
               </div>
@@ -127,7 +182,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="py-3 px-3 bg-[#181824] hover:bg-[#222232] border border-neutral-700 text-neutral-200 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
+                    className="py-3 px-3 bg-[#181824] hover:bg-[#222232] border border-neutral-700 text-neutral-200 font-bold text-xs rounded-xl transition-all cursor-pointer text-center active:scale-95"
                   >
                     متابعة التسوق
                   </button>
@@ -137,7 +192,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                       onClose();
                       onViewOrders();
                     }}
-                    className="py-3 px-3 bg-[#D4AF37] text-black font-bold text-xs rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                    className="py-3 px-3 gold-gradient-bg text-black font-extrabold text-xs rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                   >
                     <PackageCheck className="w-4 h-4 fill-black" />
                     <span>متابعة طلباتي</span>
@@ -145,7 +200,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                 </div>
               </div>
 
-            </div>
+            </motion.div>
           </main>
         </motion.div>
       )}

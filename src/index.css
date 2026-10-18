@@ -23,10 +23,8 @@
   }
 }
 
-/* iOS Safari Fix for Sticky/Fixed Menu Transparency Glitch on Scroll */
-header, nav, .sticky, .fixed {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+/* Smooth GPU layer promotion for main navigation only */
+header, nav {
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
@@ -95,59 +93,57 @@ header, nav, .sticky, .fixed {
 @keyframes iosFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: translate3d(0, 6px, 0) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 @keyframes iosSlideUp {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translate3d(0, 16px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes iosSlideRight {
   from {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translate3d(100%, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes iosToastIn {
   0% {
     opacity: 0;
-    transform: translateY(20px) scale(0.92);
+    transform: translate3d(0, 16px, 0) scale(0.94);
   }
-  60% {
+  65% {
     opacity: 1;
-    transform: translateY(-4px) scale(1.02);
+    transform: translate3d(0, -2px, 0) scale(1.01);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 @keyframes macPageEntrance {
   0% {
     opacity: 0;
-    filter: blur(4px);
   }
   100% {
     opacity: 1;
-    filter: blur(0px);
   }
 }
 
@@ -163,23 +159,23 @@ header, nav, .sticky, .fixed {
 }
 
 .animate-ios-fade-in {
-  animation: iosFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: iosFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ios-slide-up {
-  animation: iosSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: iosSlideUp 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ios-slide-right {
-  animation: iosSlideRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: iosSlideRight 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ios-toast {
-  animation: iosToastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: iosToastIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-mac-page {
-  animation: macPageEntrance 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: macPageEntrance 0.3s ease-out;
 }
 
 .animate-pulse-glow {
@@ -193,93 +189,93 @@ header, nav, .sticky, .fixed {
     opacity: 0.55;
   }
   50% {
-    transform: translate3d(220px, 140px, 0) scale(1.35) rotate(45deg);
+    transform: translate3d(220px, 140px, 0) scale(1.35) rotate(25deg);
     opacity: 0.95;
   }
   100% {
-    transform: translate3d(-140px, 240px, 0) scale(1.1) rotate(-30deg);
-    opacity: 0.65;
+    transform: translate3d(-160px, 220px, 0) scale(1.05) rotate(-20deg);
+    opacity: 0.7;
   }
 }
 
 @keyframes goldFlow2 {
   0% {
-    transform: translate3d(0, 0, 0) scale(1.25) rotate(0deg);
+    transform: translate3d(0, 0, 0) scale(1.1) rotate(0deg);
     opacity: 0.6;
   }
   50% {
-    transform: translate3d(-240px, -160px, 0) scale(0.85) rotate(-55deg);
+    transform: translate3d(-240px, -160px, 0) scale(0.85) rotate(-30deg);
     opacity: 0.95;
   }
   100% {
-    transform: translate3d(180px, -100px, 0) scale(1.3) rotate(35deg);
+    transform: translate3d(180px, -120px, 0) scale(1.3) rotate(20deg);
     opacity: 0.65;
   }
 }
 
 @keyframes goldFlow3 {
   0% {
-    transform: translate3d(0, 0, 0) scale(0.85);
+    transform: translate3d(0, 0, 0) scale(0.95);
     opacity: 0.5;
   }
   50% {
-    transform: translate3d(190px, -200px, 0) scale(1.4);
-    opacity: 0.95;
+    transform: translate3d(190px, -190px, 0) scale(1.4);
+    opacity: 0.9;
   }
   100% {
-    transform: translate3d(-180px, 140px, 0) scale(1.05);
+    transform: translate3d(-190px, 140px, 0) scale(1.1);
     opacity: 0.6;
   }
 }
 
 @keyframes goldFlow4 {
   0% {
-    transform: translate3d(0, 0, 0) scale(1.15) rotate(0deg);
-    opacity: 0.55;
+    transform: translate3d(0, 0, 0) scale(1.1);
+    opacity: 0.45;
   }
   50% {
-    transform: translate3d(-170px, 190px, 0) scale(0.85) rotate(45deg);
-    opacity: 0.92;
+    transform: translate3d(-180px, 200px, 0) scale(0.85);
+    opacity: 0.85;
   }
   100% {
-    transform: translate3d(140px, -170px, 0) scale(1.3) rotate(-40deg);
-    opacity: 0.6;
+    transform: translate3d(160px, -170px, 0) scale(1.3);
+    opacity: 0.55;
   }
 }
 
 @keyframes luxuryGoldBreath {
   0%, 100% {
-    opacity: 0.45;
+    opacity: 0.4;
     transform: scale(0.9) translateZ(0);
   }
   50% {
-    opacity: 0.95;
-    transform: scale(1.3) translateZ(0);
+    opacity: 0.85;
+    transform: scale(1.22) translateZ(0);
   }
 }
 
 .animate-gold-flow-1 {
-  animation: goldFlow1 6.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  animation: goldFlow1 7s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
 .animate-gold-flow-2 {
-  animation: goldFlow2 7.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  animation: goldFlow2 9s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
 .animate-gold-flow-3 {
-  animation: goldFlow3 5.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  animation: goldFlow3 8s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
 .animate-gold-flow-4 {
-  animation: goldFlow4 8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  animation: goldFlow4 10s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
 .animate-gold-breath {
-  animation: luxuryGoldBreath 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  animation: luxuryGoldBreath 5s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
@@ -288,23 +284,54 @@ header, nav, .sticky, .fixed {
   * {
     -webkit-tap-highlight-color: transparent;
   }
-  .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-lg {
-    backdrop-filter: blur(8px) !important;
-  }
 }
 
-/* Premium Card Tap / Press Micro-Interactions */
+/* Premium Card Tap / Press Micro-Interactions (For non-Framer-Motion elements) */
 .ios-card-hover {
-  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.25s cubic-bezier(0.2, 0, 0, 1), border-color 0.25s ease;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease;
 }
 .ios-card-hover:hover {
-  transform: translateY(-3px) scale(1.008);
+  transform: translate3d(0, -3px, 0);
 }
 .ios-card-hover:active {
   transform: scale(0.985);
 }
 
-/* Subtle Shimmer Effect for VIP elements */
+/* Tab & Section Transition Animations */
+@keyframes macTabIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-mac-tab {
+  animation: macTabIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: iosFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Gentle Luxury Floating Effect */
+@keyframes luxuryFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+.animate-luxury-float {
+  animation: luxuryFloat 4s ease-in-out infinite;
+}
+
+/* Subtle Shimmer Effect for VIP elements & CTA Buttons */
 @keyframes goldShimmer {
   0% {
     background-position: -200% 0;
@@ -315,12 +342,14 @@ header, nav, .sticky, .fixed {
 }
 
 .gold-shimmer {
-  background: linear-gradient(90deg, rgba(212,175,55,0) 0%, rgba(243,229,171,0.2) 50%, rgba(212,175,55,0) 100%);
+  background: linear-gradient(90deg, rgba(212,175,55,0) 0%, rgba(243,229,171,0.22) 50%, rgba(212,175,55,0) 100%);
   background-size: 200% 100%;
   animation: goldShimmer 3s infinite linear;
 }
 
-/* GPU Rendering & Hardware Acceleration Optimizations */
-.product-card-contain {
-  transform: translateZ(0);
+.luxury-glass-panel {
+  background: linear-gradient(145deg, rgba(20, 20, 28, 0.92) 0%, rgba(12, 12, 17, 0.96) 100%);
+  box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.85), inset 0 1px 0 0 rgba(212, 175, 55, 0.18);
 }
+
+

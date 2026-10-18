@@ -143,11 +143,11 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-1">
       {/* Outer Strip Frame with Luxury Gold Outline */}
       <div 
         dir="ltr"
-        className="relative w-full rounded-2xl bg-[#0B0B0F]/95 backdrop-blur-md border border-[#D4AF37]/35 shadow-[0_4px_25px_rgba(0,0,0,0.65)] overflow-hidden cursor-grab active:cursor-grabbing select-none p-2 sm:p-2.5 shrink-0"
+        className="relative w-full rounded-xl bg-[#0B0B0F] border border-[#D4AF37]/30 shadow-[0_4px_20px_rgba(0,0,0,0.6)] overflow-hidden cursor-grab active:cursor-grabbing select-none p-1.5 sm:p-2 shrink-0"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -160,8 +160,8 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
         }}
       >
         {/* Soft edge gradient masks */}
-        <div className="absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
 
         {/* 
           Continuous Twin-Half Conveyor:
@@ -169,7 +169,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
         */}
         <div 
           ref={trackRef}
-          className="flex items-center gap-3"
+          className="flex items-center gap-2.5"
           style={{ 
             width: 'max-content',
             willChange: 'transform',
@@ -177,12 +177,12 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
           }}
         >
           {/* Half 1 */}
-          <div ref={group1Ref} className="flex items-center gap-3 shrink-0">
+          <div ref={group1Ref} className="flex items-center gap-2.5 shrink-0">
             {singleHalfBlock.map((product, idx) => (
               <div
                 key={`h1-${product.id}-${idx}`}
                 onClick={() => handleCardClick(product)}
-                className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1.5 transition-transform duration-200 transform hover:scale-105 shadow-md flex items-center justify-center cursor-pointer group"
+                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-sm flex items-center justify-center cursor-pointer group"
                 title={product.name}
               >
                 <img
@@ -192,19 +192,19 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
                   loading="lazy"
                   decoding="async"
                   onLoad={updateMeasurement}
-                  className="w-full h-full object-contain object-center rounded-lg pointer-events-none transition-transform duration-200 group-hover:scale-110"
+                  className="w-full h-full object-contain object-center rounded-md pointer-events-none transition-transform duration-200 group-hover:scale-110"
                 />
               </div>
             ))}
           </div>
 
           {/* Half 2 */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             {singleHalfBlock.map((product, idx) => (
               <div
                 key={`h2-${product.id}-${idx}`}
                 onClick={() => handleCardClick(product)}
-                className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1.5 transition-transform duration-200 transform hover:scale-105 shadow-md flex items-center justify-center cursor-pointer group"
+                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-sm flex items-center justify-center cursor-pointer group"
                 title={product.name}
               >
                 <img
@@ -213,7 +213,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
                   draggable={false}
                   loading="lazy"
                   decoding="async"
-                  className="w-full h-full object-contain object-center rounded-lg pointer-events-none transition-transform duration-200 group-hover:scale-110"
+                  className="w-full h-full object-contain object-center rounded-md pointer-events-none transition-transform duration-200 group-hover:scale-110"
                 />
               </div>
             ))}

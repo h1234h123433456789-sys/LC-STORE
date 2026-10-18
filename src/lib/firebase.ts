@@ -15,7 +15,7 @@ import {
   getDoc
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Product, ProductList, Order, User, AdminStaffMember } from '../types';
+import { Product, ProductList, Order, User, AdminStaffMember, FreeShippingConfig } from '../types';
 import { hashPassword, verifyPassword, sanitizeInput } from '../utils/security';
 
 export enum OperationType {
@@ -785,5 +785,49 @@ export async function getAdminPinFromFirestore(): Promise<string | null> {
     return null;
   }
 }
+
+// ================= FREE SHIPPING OFFER CLOUD SYNC =================
+export function subscribeToFreeShippingConfig(
+  onSuccess: (config: FreeShippingConfig) => void,
+  onError?: (err: unknown) => void
+) {
+  if (isQuotaExceededInSession()) {
+    return () => {};
+  }
+  const docRef = doc(db, 'settings', 'free_shipping');
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && typeof data.enabled === 'boolean') {
+          const rawAmount = typeof data.minOrderAmountIQD === 'number' ? data.minOrderAmountIQD : 50000;
+          onSuccess({
+            enabled: data.enabled,
+            minOrderAmountIQD: Math.max(1000, Math.floor(rawAmount))
+          });
+        }
+      }
+    },
+    (error) => {
+      console.warn('Could not sync free shipping config from Firestore:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+export async function saveFreeShippingConfigToFirestore(config: FreeShippingConfig): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'free_shipping');
+    await setDoc(docRef, {
+      enabled: Boolean(config.enabled),
+      minOrderAmountIQD: Math.max(1000, Math.floor(Number(config.minOrderAmountIQD) || 50000)),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (error) {
+    console.warn('Error saving free shipping config to Firestore:', error);
+  }
+}
+
 
 

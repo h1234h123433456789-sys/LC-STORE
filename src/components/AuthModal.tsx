@@ -132,18 +132,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="fixed inset-0 z-[100] w-full h-[100dvh] bg-[#0A0A0E] flex flex-col overflow-hidden text-right"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="fixed inset-0 z-[125] w-full h-[100dvh] bg-[#07070A] flex flex-col overflow-hidden text-right"
         >
+          {/* Dynamic High-Visibility Luxury Gold Ambient Lighting */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
+            <div 
+              className="absolute inset-0" 
+              style={{
+                background: `
+                  radial-gradient(ellipse 85% 50% at 50% 0%, rgba(212,175,55,0.22) 0%, transparent 70%),
+                  radial-gradient(ellipse 75% 50% at 50% 100%, rgba(185,135,28,0.18) 0%, transparent 72%)
+                `
+              }}
+            />
+            <div 
+              className="absolute -top-32 -right-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-1" 
+              style={{ 
+                background: 'radial-gradient(circle, rgba(255,215,65,0.28) 0%, rgba(212,175,55,0.14) 35%, rgba(212,175,55,0.04) 58%, transparent 75%)'
+              }} 
+            />
+            <div 
+              className="absolute -bottom-32 -left-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-2" 
+              style={{ 
+                background: 'radial-gradient(circle, rgba(245,195,45,0.24) 0%, rgba(212,175,55,0.11) 38%, rgba(212,175,55,0.03) 60%, transparent 75%)'
+              }} 
+            />
+          </div>
+
           {/* Top Sticky Header Bar */}
-          <header className="sticky top-0 z-30 w-full bg-[#111116]/95 backdrop-blur-md border-b border-neutral-800/90 px-4 sm:px-8 py-3.5 flex items-center justify-between shrink-0 shadow-md">
+          <header className="sticky top-0 z-30 w-full bg-[#0F0F15] border-b border-[#D4AF37]/20 px-4 sm:px-8 py-3 flex items-center justify-between shrink-0 shadow-md">
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1C1C26] hover:bg-[#252533] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#181822] hover:bg-[#222230] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95"
               >
                 <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
                 <span>العودة للمتجر</span>
@@ -156,12 +181,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </header>
 
           {/* Body Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex items-center justify-center">
-            <div className="relative w-full max-w-md bg-[#111116] border border-[#D4AF37]/50 rounded-3xl shadow-[0_0_80px_rgba(212,175,55,0.22)] p-6 md:p-8 my-auto">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex items-center justify-center relative z-10">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+              className="relative w-full max-w-md bg-[#101017] border border-[#D4AF37]/40 rounded-2xl shadow-2xl p-5 sm:p-7 my-auto"
+            >
               
               {/* Header */}
-              <div className="text-center space-y-2 mb-6">
-                <h3 className="text-lg font-bold text-white">
+              <div className="text-center space-y-1.5 mb-5">
+                <h3 className="text-base sm:text-lg font-bold text-white">
                   {activeTab === 'register' ? 'إنشاء حساب جديد محمي برمز سري' : 'تسجيل الدخول إلى حسابك'}
                 </h3>
                 <p className="text-xs text-neutral-400 leading-relaxed">
@@ -174,7 +205,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {/* Toggle Tabs */}
-              <div className="flex rounded-xl bg-[#1A1A22] p-1 border border-neutral-800 mb-6">
+              <div className="flex rounded-xl bg-[#1A1A22] p-1 border border-neutral-800 mb-5 relative">
                 <button
                   type="button"
                   onClick={() => {
@@ -182,14 +213,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setError(null);
                     setSuccessMsg(null);
                   }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`relative flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'register'
-                      ? 'bg-[#D4AF37] text-black shadow-md'
+                      ? 'text-black'
                       : 'text-neutral-400 hover:text-white'
                   }`}
                 >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>حساب جديد</span>
+                  {activeTab === 'register' && (
+                    <motion.div
+                      layoutId="authModalActiveTab"
+                      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                      className="absolute inset-0 rounded-lg gold-gradient-bg shadow-md"
+                    />
+                  )}
+                  <UserPlus className="w-3.5 h-3.5 relative z-10" />
+                  <span className="relative z-10">حساب جديد</span>
                 </button>
                 <button
                   type="button"
@@ -198,35 +236,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setError(null);
                     setSuccessMsg(null);
                   }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`relative flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'login'
-                      ? 'bg-[#D4AF37] text-black shadow-md'
+                      ? 'text-black'
                       : 'text-neutral-400 hover:text-white'
                   }`}
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>تسجيل دخول</span>
+                  {activeTab === 'login' && (
+                    <motion.div
+                      layoutId="authModalActiveTab"
+                      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                      className="absolute inset-0 rounded-lg gold-gradient-bg shadow-md"
+                    />
+                  )}
+                  <LogIn className="w-3.5 h-3.5 relative z-10" />
+                  <span className="relative z-10">تسجيل دخول</span>
                 </button>
               </div>
 
               {/* Messages */}
               {error && (
-                <div className="mb-4 p-3 bg-red-950/70 border border-red-500/50 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-red-950/70 border border-red-500/50 rounded-xl text-xs text-red-200 flex items-center gap-2"
+                >
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                   <span>{error}</span>
-                </div>
+                </motion.div>
               )}
 
               {successMsg && (
-                <div className="mb-4 p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-xs text-emerald-200 flex items-center gap-2">
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-xs text-emerald-200 flex items-center gap-2"
+                >
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>{successMsg}</span>
-                </div>
+                </motion.div>
               )}
 
-              {/* Form */}
+              {/* Form with smooth tab transition */}
               {activeTab === 'register' ? (
-                <form onSubmit={handleRegister} className="space-y-3.5">
+                <motion.form
+                  key="register-form"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  onSubmit={handleRegister}
+                  className="space-y-3"
+                >
                   <div>
                     <label className="block text-xs text-neutral-300 font-medium mb-1">الاسم الكامل *</label>
                     <div className="relative">
@@ -312,9 +372,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </>
                     )}
                   </button>
-                </form>
-              ) : (
-                <form onSubmit={handleLogin} className="space-y-4">
+                  </motion.form>
+                ) : (
+                <motion.form
+                  key="login-form"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  onSubmit={handleLogin}
+                  className="space-y-4"
+                >
                   <div>
                     <label className="block text-xs text-neutral-300 font-medium mb-1">البريد الإلكتروني أو رقم الهاتف</label>
                     <div className="relative">
@@ -366,14 +433,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </>
                     )}
                   </button>
-                </form>
+                </motion.form>
               )}
 
               <div className="mt-5 pt-4 border-t border-neutral-800/80 text-center text-[11px] text-neutral-500 flex items-center justify-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-[#D4AF37]" />
                 <span>بياناتك محمية ومحفوظة بأمان بمتجر LC</span>
               </div>
-            </div>
+            </motion.div>
           </main>
         </motion.div>
       )}
