@@ -1,5 +1,5 @@
 // Service Worker for LC Boutique Background & Device Push Notifications
-const CACHE_NAME = 'lc-store-cache-v3';
+const CACHE_NAME = 'lc-store-cache-v5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -49,8 +49,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'لديك تنبيه جديد من متجر LC',
-    icon: data.icon || '/pwa-192x192.png',
-    badge: '/icon.svg',
+    icon: data.icon || '/pwa-192x192.png?v=white',
+    badge: '/icon.svg?v=white',
     vibrate: [200, 100, 200],
     data: data.data || { url: '/' },
     renotify: true,

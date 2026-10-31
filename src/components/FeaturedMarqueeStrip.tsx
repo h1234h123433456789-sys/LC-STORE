@@ -147,7 +147,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
       {/* Outer Strip Frame with Luxury Gold Outline */}
       <div 
         dir="ltr"
-        className="relative w-full rounded-xl bg-[#0B0B0F] border border-[#D4AF37]/30 shadow-[0_4px_20px_rgba(0,0,0,0.6)] overflow-hidden cursor-grab active:cursor-grabbing select-none p-1.5 sm:p-2 shrink-0"
+        className="relative w-full rounded-xl bg-white border border-[#D4AF37]/45 shadow-xs overflow-hidden cursor-grab active:cursor-grabbing select-none p-1.5 sm:p-2 shrink-0"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -159,10 +159,6 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
           transform: 'translateZ(0)'
         }}
       >
-        {/* Soft edge gradient masks */}
-        <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#0B0B0F] to-transparent z-10 pointer-events-none" />
-
         {/* 
           Continuous Twin-Half Conveyor:
           Ultra-lightweight DOM footprint, GPU accelerated 60fps/120fps.
@@ -182,7 +178,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
               <div
                 key={`h1-${product.id}-${idx}`}
                 onClick={() => handleCardClick(product)}
-                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-sm flex items-center justify-center cursor-pointer group"
+                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-white border border-[#D4AF37]/35 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-xs flex items-center justify-center cursor-pointer group"
                 title={product.name}
               >
                 <img
@@ -204,7 +200,7 @@ export const FeaturedMarqueeStrip: React.FC<FeaturedMarqueeStripProps> = ({
               <div
                 key={`h2-${product.id}-${idx}`}
                 onClick={() => handleCardClick(product)}
-                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-[#14141B] border border-neutral-700/80 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-sm flex items-center justify-center cursor-pointer group"
+                className="shrink-0 w-15 h-15 sm:w-18 sm:h-18 rounded-lg bg-white border border-[#D4AF37]/35 hover:border-[#D4AF37] p-1 transition-transform duration-200 transform hover:scale-105 shadow-xs flex items-center justify-center cursor-pointer group"
                 title={product.name}
               >
                 <img

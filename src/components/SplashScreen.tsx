@@ -49,21 +49,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       tabIndex={0}
       aria-label="تخطي شاشة البداية"
       style={{ height: '100dvh', maxHeight: '-webkit-fill-available' }}
-      className={`fixed inset-0 z-[999999] w-screen h-screen bg-[#070709] flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-opacity duration-300 ease-out ${
+      className={`fixed inset-0 z-[999999] w-screen h-screen bg-white flex flex-col items-center justify-center select-none overflow-hidden cursor-pointer transition-opacity duration-300 ease-out ${
         isClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* 1. Large Radiant Golden Background Aura */}
-      <div 
-        className="absolute w-[320px] h-[320px] sm:w-[460px] sm:h-[460px] rounded-full pointer-events-none animate-aura-pulse"
-        style={{
-          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.4) 0%, rgba(184, 138, 34, 0.18) 40%, rgba(117, 80, 10, 0.05) 70%, transparent 85%)',
-        }}
-      />
-
       {/* 2. Concentric Golden Halo Ring */}
       <div 
-        className="absolute w-[240px] h-[240px] sm:w-[340px] sm:h-[340px] rounded-full border border-[#D4AF37]/35 pointer-events-none animate-halo-expand"
+        className="absolute w-[240px] h-[240px] sm:w-[340px] sm:h-[340px] rounded-full border border-[#D4AF37]/45 pointer-events-none animate-halo-expand"
         style={{
           boxShadow: '0 0 35px rgba(212, 175, 55, 0.25), inset 0 0 35px rgba(212, 175, 55, 0.15)',
         }}
@@ -77,17 +69,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           <svg 
             viewBox="0 0 300 180" 
             className="w-56 h-36 sm:w-72 sm:h-44 overflow-visible"
-            style={{ filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.9))' }}
+            style={{ filter: 'drop-shadow(0 10px 25px rgba(180,135,28,0.28))' }}
           >
             <defs>
               {/* 24K Royal Gold Gradient */}
               <linearGradient id="splashGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#FFFFFF" />
-                <stop offset="15%" stopColor="#FFF8D6" />
-                <stop offset="35%" stopColor="#F7E7B4" />
-                <stop offset="60%" stopColor="#E5C158" />
-                <stop offset="85%" stopColor="#C29B27" />
-                <stop offset="100%" stopColor="#8F6A10" />
+                <stop offset="0%" stopColor="#8A6415" />
+                <stop offset="25%" stopColor="#C29B27" />
+                <stop offset="50%" stopColor="#E5C158" />
+                <stop offset="75%" stopColor="#D4AF37" />
+                <stop offset="100%" stopColor="#7A5610" />
               </linearGradient>
 
               {/* Golden Bloom Filter */}
@@ -97,7 +88,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
                   1 0 0 0 0.83
                   0 1 0 0 0.68
                   0 0 1 0 0.21
-                  0 0 0 0.5 0" in="blur" result="glow" />
+                  0 0 0 0.45 0" in="blur" result="glow" />
                 <feMerge>
                   <feMergeNode in="glow" />
                   <feMergeNode in="SourceGraphic" />
@@ -115,7 +106,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
               fontSize="125" 
               fontWeight="900" 
               fill="#D4AF37" 
-              opacity="0.6"
+              opacity="0.5"
               filter="url(#goldBloom)"
               letterSpacing="6"
             >
@@ -140,35 +131,34 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
           {/* 4-Point Brilliant Star Sparkle Pop */}
           <div 
-            className="absolute top-1 -right-2 text-[#FFF8D6] animate-sparkle-pop"
+            className="absolute top-1 -right-2 text-[#D4AF37] animate-sparkle-pop"
             style={{
-              filter: 'drop-shadow(0 0 10px rgba(255, 248, 214, 1)) drop-shadow(0 0 20px rgba(212, 175, 55, 0.9))',
+              filter: 'drop-shadow(0 0 10px rgba(212, 175, 55, 0.8))',
             }}
           >
-            <Sparkles className="w-8 h-8 text-[#FFF8D6] fill-[#FFF8D6]" />
+            <Sparkles className="w-8 h-8 text-[#D4AF37] fill-[#D4AF37]" />
           </div>
         </div>
 
         {/* 4. Brand Typography */}
         <div className="space-y-1 text-center animate-brand-reveal mt-2">
           <div 
-            className="text-base sm:text-lg font-bold uppercase text-white tracking-[0.35em]"
+            className="text-base sm:text-lg font-bold uppercase text-neutral-900 tracking-[0.35em]"
             style={{
               fontFamily: "'Cinzel', Georgia, serif",
-              textShadow: '0 2px 8px rgba(0,0,0,0.9)',
             }}
           >
             LC STORE
           </div>
-          <div className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-[#D4AF37]">
+          <div className="text-xs sm:text-sm font-bold tracking-[0.2em] text-[#9A7217]">
             متجر LC الرسمي
           </div>
         </div>
 
         {/* 5. Minimalist 24K Gold Progress Line */}
-        <div className="mt-6 w-36 sm:w-48 h-[2px] bg-white/10 rounded-full overflow-hidden relative">
+        <div className="mt-6 w-36 sm:w-48 h-[2px] bg-[#D4AF37]/20 rounded-full overflow-hidden relative">
           <div 
-            className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#AA7A1E] via-[#FFF3C4] to-[#D4AF37] rounded-full shadow-[0_0_10px_#D4AF37]"
+            className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#AA7A1E] via-[#D4AF37] to-[#8A6415] rounded-full shadow-[0_0_10px_rgba(212,175,55,0.6)]"
             style={{
               animation: 'progressFill 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards',
             }}

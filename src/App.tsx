@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Sparkles, Package, X, Clock, ShieldCheck, Lock, Layers, Database, Tag } from 'lucide-react';
-import { Product, CartItem, User, Order, ProductList, FreeShippingConfig } from './types';
+import { Product, CartItem, User, Order, ProductList, FreeShippingConfig, getProductVariants } from './types';
 import { INITIAL_PRODUCTS } from './data/initialProducts';
 import { 
   testConnection, 
@@ -38,7 +38,6 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { MyOrdersModal } from './components/MyOrdersModal';
 import { AdminPortal } from './components/AdminPortal';
-import { AmbientGoldAura } from './components/AmbientGoldAura';
 import { FeaturedMarqueeStrip } from './components/FeaturedMarqueeStrip';
 import { Footer } from './components/Footer';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -706,63 +705,173 @@ export default function App() {
     return list;
   }, [products, activeListId, productLists]);
 
+  // Helper to get effective available stock count for a product (or a specific variant option)
+  const getProductStock = (p: Product, selectedOption?: string): number => {
+    if (!p) return 0;
+    const variants = getProductVariants(p);
+    if (variants.length > 0) {
+      if (selectedOption) {
+        const matched = variants.find((v) => v.name === selectedOption.trim());
+        if (matched) return Math.max(0, matched.stockCount);
+      }
+      const firstAvail = variants.find((v) => v.stockCount > 0) || variants[0];
+      return Math.max(0, firstAvail?.stockCount || 0);
+    }
+    if (p.inStock === false) return 0;
+    return typeof p.stockCount === 'number' ? Math.max(0, p.stockCount) : 10;
+  };
+
   // Cart operations
-  const handleAddToCart = (product: Product, quantity = 1, selectedSize?: string) => {
+  const handleAddToCart = (product: Product, quantity = 1, selectedOption?: string) => {
     if (!product || !product.id) return;
+    const variants = getProductVariants(product);
+    const firstAvailVariant = variants.find((v) => v.stockCount > 0) || variants[0];
+    const effectiveOption = selectedOption?.trim() || (variants.length > 0 ? firstAvailVariant?.name : undefined);
+    const matchedVariant = effectiveOption ? variants.find((v) => v.name === effectiveOption) : undefined;
+    const availableStock = getProductStock(product, effectiveOption);
+
+    if (availableStock <= 0) {
+      showToast(
+        effectiveOption
+          ? `عذراً، الخيار (${effectiveOption}) من "${product.name}" نفذ من المخزون حالياً`
+          : `عذراً، المنتج "${product.name}" نفذ من المخزون حالياً`
+      );
+      return;
+    }
+
+    const effectiveOptionLabel = effectiveOption
+      ? (product.customOptionLabel?.trim() || 'الخانة المحددة')
+      : undefined;
+    const effectiveOptionImage = matchedVariant?.image || undefined;
+
     setCart((prev) => {
       const existing = prev.find(
-        (item) => item?.product?.id === product.id && item?.selectedSize === selectedSize
+        (item) =>
+          item?.product?.id === product.id &&
+          (item?.selectedOption || '') === (effectiveOption || '')
       );
       if (existing) {
+        const nextQty = Math.min(availableStock, (existing.quantity || 1) + quantity);
         return prev.map((item) =>
-          item?.product?.id === product.id && item?.selectedSize === selectedSize
-            ? { ...item, quantity: (item.quantity || 1) + quantity }
+          item?.product?.id === product.id &&
+          (item?.selectedOption || '') === (effectiveOption || '')
+            ? {
+                ...item,
+                product,
+                quantity: nextQty,
+                selectedOption: effectiveOption,
+                selectedOptionLabel: effectiveOptionLabel,
+                ...(effectiveOptionImage ? { selectedOptionImage: effectiveOptionImage } : {})
+              }
             : item
         );
       }
-      return [...prev, { product, quantity, selectedSize }];
+      const initialQty = Math.min(availableStock, Math.max(1, quantity));
+      return [
+        ...prev,
+        {
+          product,
+          quantity: initialQty,
+          ...(effectiveOption ? { selectedOption: effectiveOption, selectedOptionLabel: effectiveOptionLabel } : {}),
+          ...(effectiveOptionImage ? { selectedOptionImage: effectiveOptionImage } : {})
+        }
+      ];
     });
-    const sizeNote = selectedSize ? ` (قياس: ${selectedSize})` : '';
-    showToast(`تمت إضافة "${product.name || 'المنتج'}"${sizeNote} إلى السلة`);
+    showToast(
+      effectiveOption
+        ? `تمت إضافة "${product.name}" (${effectiveOption}) إلى السلة`
+        : `تمت إضافة "${product.name || 'المنتج'}" إلى السلة`
+    );
   };
 
-  const handleUpdateQuantity = (productId: string, quantity: number, selectedSize?: string) => {
+  const handleUpdateQuantity = (productId: string, quantity: number, selectedOption?: string) => {
     if (quantity <= 0) {
-      handleRemoveItem(productId, selectedSize);
+      handleRemoveItem(productId, selectedOption);
       return;
     }
+    const storeProduct = products.find((p) => p.id === productId);
+    const maxStock = storeProduct ? getProductStock(storeProduct, selectedOption) : 999;
+    if (quantity > maxStock) {
+      showToast(`الكمية المتوفرة في المخزون هي ${maxStock} قطعة فقط`);
+    }
+    const clampedQty = Math.max(1, Math.min(quantity, maxStock || 1));
+
     setCart((prev) =>
       prev.map((item) =>
-        item?.product?.id === productId && item?.selectedSize === selectedSize
-          ? { ...item, quantity }
+        item?.product?.id === productId &&
+        (selectedOption === undefined || (item?.selectedOption || '') === (selectedOption || ''))
+          ? { ...item, quantity: clampedQty }
           : item
       )
     );
   };
 
-  const handleRemoveItem = (productId: string, selectedSize?: string) => {
+  const handleRemoveItem = (productId: string, selectedOption?: string) => {
     setCart((prev) =>
       prev.filter(
-        (item) => !(item?.product?.id === productId && item?.selectedSize === selectedSize)
+        (item) =>
+          !(
+            item?.product?.id === productId &&
+            (selectedOption === undefined || (item?.selectedOption || '') === (selectedOption || ''))
+          )
       )
     );
   };
 
   // Buy Now flow
-  const handleBuyNow = (product: Product, quantity = 1, selectedSize?: string) => {
+  const handleBuyNow = (product: Product, quantity = 1, selectedOption?: string) => {
     if (!product || !product.id) return;
+    const variants = getProductVariants(product);
+    const firstAvailVariant = variants.find((v) => v.stockCount > 0) || variants[0];
+    const effectiveOption = selectedOption?.trim() || (variants.length > 0 ? firstAvailVariant?.name : undefined);
+    const matchedVariant = effectiveOption ? variants.find((v) => v.name === effectiveOption) : undefined;
+    const availableStock = getProductStock(product, effectiveOption);
+
+    if (availableStock <= 0) {
+      showToast(
+        effectiveOption
+          ? `عذراً، الخيار (${effectiveOption}) من "${product.name}" نفذ من المخزون حالياً`
+          : `عذراً، المنتج "${product.name}" نفذ من المخزون حالياً`
+      );
+      return;
+    }
+    const clampedQty = Math.min(availableStock, Math.max(1, quantity));
+
+    const effectiveOptionLabel = effectiveOption
+      ? (product.customOptionLabel?.trim() || 'الخانة المحددة')
+      : undefined;
+    const effectiveOptionImage = matchedVariant?.image || undefined;
+
     setCart((prev) => {
       const existing = prev.find(
-        (item) => item?.product?.id === product.id && item?.selectedSize === selectedSize
+        (item) =>
+          item?.product?.id === product.id &&
+          (item?.selectedOption || '') === (effectiveOption || '')
       );
       if (existing) {
         return prev.map((item) =>
-          item?.product?.id === product.id && item?.selectedSize === selectedSize
-            ? { ...item, quantity }
+          item?.product?.id === product.id &&
+          (item?.selectedOption || '') === (effectiveOption || '')
+            ? {
+                ...item,
+                product,
+                quantity: clampedQty,
+                selectedOption: effectiveOption,
+                selectedOptionLabel: effectiveOptionLabel,
+                ...(effectiveOptionImage ? { selectedOptionImage: effectiveOptionImage } : {})
+              }
             : item
         );
       }
-      return [...prev, { product, quantity, selectedSize }];
+      return [
+        ...prev,
+        {
+          product,
+          quantity: clampedQty,
+          ...(effectiveOption ? { selectedOption: effectiveOption, selectedOptionLabel: effectiveOptionLabel } : {}),
+          ...(effectiveOptionImage ? { selectedOptionImage: effectiveOptionImage } : {})
+        }
+      ];
     });
 
     if (!user) {
@@ -821,14 +930,9 @@ export default function App() {
         if (!notifiedIds.has(newOrder.id)) {
           notifiedIds.add(newOrder.id);
           localStorage.setItem('lc_notified_orders_set', JSON.stringify(Array.from(notifiedIds).slice(-100)));
-          const sizesDetail = newOrder.items
-            .filter((it) => it.selectedSize)
-            .map((it) => `${it.product.name} (قياس: ${it.selectedSize})`)
-            .join('، ');
-          const sizesSnippet = sizesDetail ? ` | القياسات: ${sizesDetail}` : '';
 
           sendDeviceNotification('🛍️ طلب جديد وارد لمتجر LC!', {
-            body: `طلب جديد بقيمة ${formatPrice(newOrder.totalUSD, newOrder.currency)} من الزبون (${newOrder.customer?.name || 'زبون جديد'}) في ${newOrder.customer?.city || 'العراق'}${sizesSnippet}.`,
+            body: `طلب جديد بقيمة ${formatPrice(newOrder.totalUSD, newOrder.currency)} من الزبون (${newOrder.customer?.name || 'زبون جديد'}) في ${newOrder.customer?.city || 'العراق'}.`,
             type: 'order_new',
             orderId: newOrder.id
           }).catch(() => {});
@@ -1030,15 +1134,121 @@ export default function App() {
     }
   };
 
+  // Helper to adjust stock quantities for an order's items (+1 to restore, -1 to deduct)
+  // Supports per-option stock (variantOptions) as well as general product stockCount
+  const adjustStockForOrderItems = (orderItems: CartItem[], direction: 'deduct' | 'restore') => {
+    if (!orderItems || orderItems.length === 0) return;
+
+    // Group ordered items by productId -> array of { option, qty }
+    const itemsByProductId = new Map<string, Array<{ option?: string; qty: number }>>();
+    orderItems.forEach((item) => {
+      const pid = item?.product?.id;
+      const qty = Math.max(1, Number(item?.quantity) || 1);
+      if (pid) {
+        const list = itemsByProductId.get(pid) || [];
+        list.push({ option: item.selectedOption?.trim(), qty });
+        itemsByProductId.set(pid, list);
+      }
+    });
+
+    if (itemsByProductId.size === 0) return;
+
+    const applyStockDeltaToProduct = (p: Product): Product => {
+      const entries = itemsByProductId.get(p.id);
+      if (!entries || entries.length === 0) return p;
+
+      const variants = getProductVariants(p);
+      if (variants.length > 0) {
+        const updatedVariants = variants.map((v) => ({ ...v }));
+        entries.forEach(({ option, qty }) => {
+          let targetIdx = option ? updatedVariants.findIndex((v) => v.name === option) : 0;
+          if (targetIdx === -1) targetIdx = 0;
+          if (updatedVariants[targetIdx]) {
+            const cur = Math.max(0, Number(updatedVariants[targetIdx].stockCount) || 0);
+            updatedVariants[targetIdx].stockCount =
+              direction === 'deduct' ? Math.max(0, cur - qty) : cur + qty;
+          }
+        });
+        const newTotalStock = updatedVariants.reduce((sum, v) => sum + Math.max(0, v.stockCount), 0);
+        return {
+          ...p,
+          variantOptions: updatedVariants,
+          customOptions: updatedVariants.map((v) => v.name),
+          stockCount: newTotalStock,
+          inStock: newTotalStock > 0
+        };
+      }
+
+      const totalDelta = entries.reduce((sum, e) => sum + e.qty, 0);
+      const currentStock =
+        typeof p.stockCount === 'number' ? Math.max(0, p.stockCount) : p.inStock === false ? 0 : 10;
+      const newStock =
+        direction === 'deduct' ? Math.max(0, currentStock - totalDelta) : currentStock + totalDelta;
+      return {
+        ...p,
+        stockCount: newStock,
+        inStock: newStock > 0
+      };
+    };
+
+    const updatedProductsToSync: Product[] = [];
+
+    setProducts((prevProducts) => {
+      const nextProducts = prevProducts.map((p) => {
+        if (!p || !itemsByProductId.has(p.id)) return p;
+        const updatedProd = applyStockDeltaToProduct(p);
+        updatedProductsToSync.push(updatedProd);
+        return updatedProd;
+      });
+
+      try {
+        localStorage.setItem('lc_real_products', JSON.stringify(nextProducts));
+      } catch (e) {
+        console.warn('Could not persist updated stock to localStorage:', e);
+      }
+
+      return nextProducts;
+    });
+
+    // Also keep selectedProduct in sync if currently viewing it
+    setSelectedProduct((prevSelected) => {
+      if (!prevSelected || !itemsByProductId.has(prevSelected.id)) return prevSelected;
+      return applyStockDeltaToProduct(prevSelected);
+    });
+
+    // Sync updated product stock to Firestore
+    setTimeout(() => {
+      updatedProductsToSync.forEach((prod) => {
+        saveProductToFirestore(prod).catch((err) => {
+          console.warn('Firebase stock update sync error:', err);
+        });
+      });
+    }, 0);
+  };
+
   const handleUpdateOrderStatus = async (
     orderId: string,
     newStatus: 'pending' | 'approved' | 'rejected' | 'delivered'
   ) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (targetOrder && targetOrder.status !== newStatus) {
+      const wasStockDeducted = targetOrder.status === 'approved' || targetOrder.status === 'delivered';
+      const willStockBeDeducted = newStatus === 'approved' || newStatus === 'delivered';
+
+      if (!wasStockDeducted && willStockBeDeducted) {
+        // Order was pending or rejected, and is now approved/delivered -> Deduct stock
+        adjustStockForOrderItems(targetOrder.items, 'deduct');
+      } else if (wasStockDeducted && !willStockBeDeducted) {
+        // Order was approved/delivered, and is now rejected or returned to pending -> Restore stock
+        adjustStockForOrderItems(targetOrder.items, 'restore');
+      }
+    }
+
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, stockDeducted: newStatus === 'approved' || newStatus === 'delivered' } : o))
     );
-    if (newStatus === 'approved') showToast('تمت الموافقة على الطلب وجاهز للشحن والتوصيل');
-    if (newStatus === 'rejected') showToast('تم رفض الطلب');
+    if (newStatus === 'approved') showToast('تمت الموافقة على الطلب وخصم الكمية من المخزون');
+    if (newStatus === 'rejected') showToast('تم رفض الطلب وإرجاع الكمية إلى المخزون');
     if (newStatus === 'delivered') showToast('تم تأكيد تسليم الطلب واستلام المبلغ كاش');
 
     try {
@@ -1049,6 +1259,12 @@ export default function App() {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    // If the deleted order had already deducted stock (approved or delivered), restore its quantities to inventory
+    if (targetOrder && (targetOrder.status === 'approved' || targetOrder.status === 'delivered')) {
+      adjustStockForOrderItems(targetOrder.items, 'restore');
+    }
+
     // Save to locally deleted order IDs list
     try {
       const saved = localStorage.getItem('lc_deleted_order_ids');
@@ -1062,7 +1278,11 @@ export default function App() {
     }
 
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
-    showToast('تم حذف سجل الطلب');
+    showToast(
+      targetOrder && (targetOrder.status === 'approved' || targetOrder.status === 'delivered')
+        ? 'تم حذف الطلب وإرجاع الكمية إلى المخزون تلقائياً'
+        : 'تم حذف سجل الطلب'
+    );
 
     try {
       await deleteOrderFromFirestore(orderId);
@@ -1134,10 +1354,10 @@ export default function App() {
       {currentView === 'admin' ? (
         <motion.div
           key="admin-view"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
         >
           <AdminPortal
             products={products}
@@ -1177,14 +1397,11 @@ export default function App() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="relative min-h-[100dvh] bg-[#080809] text-[#EDEDED] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB] overflow-x-hidden"
+          className="relative min-h-[100dvh] bg-white text-[#1A1814] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#6B4F0E] overflow-x-hidden"
         >
       
       {/* High-End Brand Luxury Splash Screen Animation */}
       {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}
-
-      {/* Interactive Ambient Gold Lighting System */}
-      <AmbientGoldAura />
       
       {/* Toast Notification (Top-Center Floating Pill) */}
       <AnimatePresence>
@@ -1194,13 +1411,13 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -14, scale: 0.94 }}
             transition={{ type: 'spring', stiffness: 360, damping: 24 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-[110] px-3.5 py-2.5 rounded-2xl bg-[#14141D]/95 backdrop-blur-md border border-[#D4AF37]/80 text-[#F3E5AB] text-xs font-bold shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center gap-2.5 max-w-[92vw]"
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-[110] px-4 py-2.5 rounded-2xl bg-white/95 backdrop-blur-md border-2 border-[#D4AF37] text-[#1A1814] text-xs font-extrabold shadow-lg flex items-center gap-2.5 max-w-[92vw]"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <Sparkles className="w-4 h-4 text-[#D4AF37] shrink-0" />
             <span>{toastMessage}</span>
             <button 
               onClick={() => setToastMessage(null)}
-              className="text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+              className="text-neutral-400 hover:text-neutral-800 p-0.5 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1251,11 +1468,11 @@ export default function App() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="relative z-10 space-y-2 bg-gradient-to-br from-[#13131B]/95 to-[#0E0E14]/95 p-2.5 sm:p-3.5 rounded-2xl border border-[#D4AF37]/30 shadow-lg text-right"
+            className="relative z-10 space-y-2 bg-white p-2.5 sm:p-3.5 rounded-2xl border border-[#D4AF37]/40 shadow-xs text-right"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] sm:text-xs font-extrabold text-[#D4AF37] flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" />
+              <span className="text-[11px] sm:text-xs font-extrabold text-[#9A7217] flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
                 <span>قوائم ومجموعات المنتجات المميزة:</span>
               </span>
               {activeListId !== 'all' && (
@@ -1265,7 +1482,7 @@ export default function App() {
                     setActiveListId('all');
                     setActiveCategory('all');
                   }}
-                  className="text-[10px] sm:text-[11px] text-[#F3E5AB] hover:underline cursor-pointer font-semibold"
+                  className="text-[10px] sm:text-[11px] text-[#9A7217] hover:underline cursor-pointer font-bold"
                 >
                   عرض كافة المعروضات
                 </button>
@@ -1281,8 +1498,8 @@ export default function App() {
                 }}
                 className={`relative px-3 py-1.5 text-[11px] font-extrabold rounded-lg whitespace-nowrap cursor-pointer select-none active:scale-95 transition-all duration-150 ${
                   activeListId === 'all'
-                    ? 'gold-gradient-bg text-black shadow-[0_0_15px_rgba(212,175,55,0.35)] font-black'
-                    : 'bg-[#181822] text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700'
+                    ? 'gold-gradient-bg text-black shadow-xs font-black'
+                    : 'bg-neutral-50 text-neutral-700 hover:text-black border border-[#D4AF37]/30 hover:border-[#D4AF37]'
                 }`}
               >
                 <span>كافة المعروضات</span>
@@ -1307,13 +1524,13 @@ export default function App() {
                     }}
                     className={`relative px-3 py-1.5 text-[11px] font-extrabold rounded-lg whitespace-nowrap flex items-center gap-1.5 cursor-pointer select-none active:scale-95 transition-all duration-150 ${
                       isSelected
-                        ? 'gold-gradient-bg text-black shadow-[0_0_15px_rgba(212,175,55,0.35)] font-black'
-                        : 'bg-[#181822] text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700'
+                        ? 'gold-gradient-bg text-black shadow-xs font-black'
+                        : 'bg-neutral-50 text-neutral-700 hover:text-black border border-[#D4AF37]/30 hover:border-[#D4AF37]'
                     }`}
                   >
                     <span>{list.name}</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-mono ${
-                      isSelected ? 'bg-black/25 text-black font-extrabold' : 'bg-black/60 text-neutral-400'
+                      isSelected ? 'bg-black/15 text-black font-extrabold' : 'bg-neutral-100 text-[#8B6914] font-bold'
                     }`}>
                       {count}
                     </span>
@@ -1332,15 +1549,15 @@ export default function App() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="p-2.5 rounded-xl bg-gradient-to-r from-[#1E1B12] via-[#161510] to-[#121218] border border-[#D4AF37]/40 flex items-center justify-between text-[11px] shadow-sm overflow-hidden"
+                    className="p-2.5 rounded-xl bg-neutral-50 border border-[#D4AF37]/45 flex items-center justify-between text-[11px] shadow-xs overflow-hidden"
                   >
                     <div>
-                      <h3 className="font-extrabold text-white flex items-center gap-1.5">
+                      <h3 className="font-extrabold text-neutral-900 flex items-center gap-1.5">
                         <Sparkles className="w-3 h-3 text-[#D4AF37]" />
                         <span>قائمة: {activeList.name}</span>
                       </h3>
                       {activeList.description && (
-                        <p className="text-neutral-300 text-[10px] mt-0.5">{activeList.description}</p>
+                        <p className="text-neutral-600 text-[10px] mt-0.5">{activeList.description}</p>
                       )}
                     </div>
                     <button
@@ -1349,7 +1566,7 @@ export default function App() {
                         setActiveListId('all');
                         setActiveCategory('all');
                       }}
-                      className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-black/40 cursor-pointer"
+                      className="p-1 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60 cursor-pointer"
                       title="الرجوع لكافة المعروضات"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1367,20 +1584,20 @@ export default function App() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-            className="relative z-10 bg-[#111118]/95 border border-neutral-800/90 rounded-2xl p-2.5 sm:p-3.5 shadow-lg"
+            className="relative z-10 bg-white border border-[#D4AF37]/35 rounded-2xl p-2.5 sm:p-3.5 shadow-xs"
           >
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-2.5">
               
               {/* Category Filter Tabs */}
               {dynamicCategories.length > 1 ? (
                 <div className="space-y-1.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-[11px] text-[#F3E5AB] font-bold px-0.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#8B6914] font-bold px-0.5">
                     <Tag className="w-3 h-3 text-[#D4AF37]" />
                     <span>
                       {activeListId !== 'all' ? 'الأقسام التابعة لهذه القائمة:' : 'تصفح حسب القسم:'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 p-1 bg-[#0C0C12] rounded-xl border border-neutral-800/90 overflow-x-auto scrollbar-thin">
+                  <div className="flex items-center gap-1 p-1 bg-neutral-50 rounded-xl border border-[#D4AF37]/25 overflow-x-auto scrollbar-thin">
                     {dynamicCategories.map((cat) => {
                       const isActive = activeCategory === cat.id;
                       return (
@@ -1390,8 +1607,8 @@ export default function App() {
                           onClick={() => setActiveCategory(cat.id)}
                           className={`relative px-3 py-1.5 text-[11px] font-bold rounded-lg whitespace-nowrap cursor-pointer select-none active:scale-95 transition-all duration-150 ${
                             isActive
-                              ? 'bg-[#222230] text-[#F3E5AB] border border-[#D4AF37]/60 shadow-[0_0_12px_rgba(212,175,55,0.22)]'
-                              : 'bg-transparent text-neutral-400 hover:text-white border border-transparent hover:bg-neutral-800/40'
+                              ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-xs font-extrabold'
+                              : 'bg-transparent text-neutral-600 hover:text-neutral-950 border border-transparent hover:bg-neutral-200/50'
                           }`}
                         >
                           <span>{cat.label}</span>
@@ -1401,7 +1618,7 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="text-[11px] sm:text-xs font-bold text-[#F3E5AB] flex items-center gap-1.5">
+                <div className="text-[11px] sm:text-xs font-bold text-[#8B6914] flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
                   <span>إجمالي المعروضات المتاحة ({filteredProducts.length} منتج)</span>
                 </div>
@@ -1415,13 +1632,13 @@ export default function App() {
                     placeholder="ابحث عن اسم أو مواصفات منتج..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pr-8 pl-7 py-1.5 sm:py-2 text-xs bg-[#0C0C12] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-white placeholder-neutral-500 outline-none transition-colors text-right"
+                    className="w-full pr-8 pl-7 py-1.5 sm:py-2 text-xs bg-neutral-50 border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 placeholder-neutral-400 outline-none transition-colors text-right"
                   />
-                  <Search className="w-3.5 h-3.5 text-[#D4AF37]/70 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-[#B8860B] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-800 p-0.5 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1431,7 +1648,7 @@ export default function App() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-1.5 sm:py-2 text-xs font-semibold bg-[#0C0C12] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-neutral-200 outline-none cursor-pointer transition-colors"
+                  className="px-3 py-1.5 sm:py-2 text-xs font-semibold bg-neutral-50 border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-800 outline-none cursor-pointer transition-colors"
                 >
                   <option value="featured">الترتيب الافتراضي</option>
                   <option value="price-asc">السعر: من الأقل للأعلى</option>
@@ -1451,29 +1668,29 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.22 }}
             style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-            className="relative z-10 py-12 px-5 text-center space-y-3 bg-[#111116] rounded-2xl border border-neutral-800 shadow-lg"
+            className="relative z-10 py-12 px-5 text-center space-y-3 bg-white rounded-2xl border border-[#D4AF37]/35 shadow-md"
           >
-            <div className="w-13 h-13 rounded-2xl bg-[#181822] border border-[#D4AF37]/30 flex items-center justify-center mx-auto text-[#D4AF37] animate-luxury-float">
+            <div className="w-13 h-13 rounded-2xl bg-[#FAF6EC] border border-[#D4AF37]/45 flex items-center justify-center mx-auto text-[#B8860B] animate-luxury-float">
               <Package className="w-6 h-6" />
             </div>
             
             <div className="max-w-md mx-auto space-y-1.5">
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-neutral-900">
                 {products.length === 0 ? 'المتجر قيد التجهيز والتحديث' : 'لا توجد منتجات مطابقة لهذا البحث'}
               </h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
+              <p className="text-xs text-neutral-500 leading-relaxed">
                 {products.length === 0
                   ? 'أهلاً بكم في متجر LC! يتم حالياً تجهيز وإدراج الدفعة الجديدة من المنتجات والبضائع المميزة. ترقبوا الإطلاق الرسمي قريباً.'
                   : 'يمكنك مسح البحث أو اختيار تصنيف آخر لعرض باقي المعروضات.'}
               </p>
             </div>
 
-            <div className="pt-1 flex flex-wrap justify-center gap-2 text-[11px] text-neutral-400">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#16161F] border border-neutral-800">
+            <div className="pt-1 flex flex-wrap justify-center gap-2 text-[11px] text-neutral-600">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF7EF] border border-[#D4AF37]/30">
                 <Clock className="w-3 h-3 text-[#D4AF37]" />
                 <span>إطلاق دفعات جديدة قريباً</span>
               </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#16161F] border border-neutral-800">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF7EF] border border-[#D4AF37]/30">
                 <ShieldCheck className="w-3 h-3 text-[#D4AF37]" />
                 <span>توصيل ودفع كاش عند الاستلام</span>
               </span>
@@ -1489,8 +1706,8 @@ export default function App() {
                   currency={currency}
                   freeShippingConfig={freeShippingConfig}
                   onQuickView={(p) => setSelectedProduct(p)}
-                  onAddToCart={(p) => handleAddToCart(p, 1)}
-                  onBuyNow={(p) => handleBuyNow(p, 1)}
+                  onAddToCart={(p, selectedOption) => handleAddToCart(p, 1, selectedOption)}
+                  onBuyNow={(p, selectedOption) => handleBuyNow(p, 1, selectedOption)}
                   onOpenZoom={(images, initialIndex, title) => {
                     setLightboxState({
                       isOpen: true,
@@ -1526,9 +1743,9 @@ export default function App() {
         freeShippingConfig={freeShippingConfig}
         isCovered={Boolean(isCheckoutOpen || isAuthOpen)}
         onClose={() => setSelectedProduct(null)}
-        onAddToCart={(p, qty, size) => handleAddToCart(p, qty, size)}
-        onBuyNow={(p, qty, size) => {
-          handleBuyNow(p, qty, size);
+        onAddToCart={(p, qty, selectedOption) => handleAddToCart(p, qty, selectedOption)}
+        onBuyNow={(p, qty, selectedOption) => {
+          handleBuyNow(p, qty, selectedOption);
         }}
         onOpenZoom={(images, initialIndex, title) => {
           setLightboxState({

@@ -71,7 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#080809]/92 border-b border-[#D4AF37]/15">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/95 border-b border-[#D4AF37]/30 shadow-[0_4px_20px_rgba(212,175,55,0.08)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
         
         {/* 1. Brand Wordmark (Right in RTL) */}
@@ -97,7 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="relative py-1 text-[#F3E5AB] font-semibold hover:text-white transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-full after:h-[2px] after:bg-[#D4AF37] after:rounded-full"
+            className="relative py-1 text-[#8B6914] font-bold hover:text-neutral-900 transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-full after:h-[2px] after:bg-[#D4AF37] after:rounded-full"
           >
             الرئيسية
           </a>
@@ -107,7 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               e.preventDefault();
               document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="relative py-1 text-neutral-400 hover:text-[#F3E5AB] transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-0 hover:after:w-full after:h-[2px] after:bg-[#D4AF37]/70 after:transition-all after:duration-300"
+            className="relative py-1 text-neutral-600 hover:text-[#8B6914] transition-colors after:content-[''] after:absolute after:bottom-0 after:right-0 after:w-0 hover:after:w-full after:h-[2px] after:bg-[#D4AF37]/70 after:transition-all after:duration-300"
           >
             معروضات المتجر
           </a>
@@ -130,7 +130,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={onOpenNotifications}
               aria-label="التنبيهات والإشعارات"
-              className="relative p-2 rounded-xl bg-[#13131A] border border-neutral-800 hover:border-[#D4AF37]/60 text-neutral-300 hover:text-[#F3E5AB] transition-colors cursor-pointer shadow-xs"
+              className="relative p-2 rounded-xl bg-[#FAF7EF] border border-[#D4AF37]/35 hover:border-[#D4AF37] text-[#8B6914] hover:text-neutral-900 transition-colors cursor-pointer shadow-xs"
               title="مركز الإشعارات والتنبيهات"
             >
               <Bell className="w-4 h-4" />
@@ -150,16 +150,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-[#F3E5AB] bg-[#14141C] border border-[#D4AF37]/50 hover:border-[#D4AF37] rounded-xl transition-colors shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-neutral-900 bg-[#FAF7EF] border border-[#D4AF37]/50 hover:border-[#D4AF37] rounded-xl transition-colors shadow-xs cursor-pointer"
                 title="الملف الشخصي والخيارات"
               >
-                <div className="w-4 h-4 rounded-full bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37]">
+                <div className="w-4 h-4 rounded-full bg-[#D4AF37]/25 flex items-center justify-center text-[#9A7217]">
                   <UserIcon className="w-3 h-3" />
                 </div>
                 <span className="max-w-[65px] sm:max-w-[95px] truncate font-bold text-[11px] sm:text-xs">
                   {user.name ? user.name.split(' ')[0] : 'ملفي'}
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-[#D4AF37] transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-[#B8860B] transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
               </motion.button>
 
               {/* Floating Luxury User Menu Dropdown */}
@@ -171,16 +171,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     exit={{ opacity: 0, y: 6, scale: 0.95 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 350 }}
                     dir="rtl"
-                    className="absolute left-0 mt-2 w-56 rounded-2xl bg-[#111118] border border-[#D4AF37]/45 shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-2 z-50 text-right space-y-1"
+                    className="absolute left-0 mt-2 w-56 rounded-2xl bg-white border border-[#D4AF37]/50 shadow-[0_20px_50px_rgba(180,135,28,0.18)] p-2 z-50 text-right space-y-1"
                   >
                     {/* User Info Header */}
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#1A1A28] to-[#14141E] border border-[#D4AF37]/25 mb-1 space-y-0.5">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#FDF9EE] to-[#FAF4E4] border border-[#D4AF37]/35 mb-1 space-y-0.5">
                       <div className="flex items-center gap-1.5">
                         <Sparkles className="w-3 h-3 text-[#D4AF37]" />
-                        <span className="text-xs font-extrabold text-white truncate">{user.name}</span>
+                        <span className="text-xs font-extrabold text-neutral-900 truncate">{user.name}</span>
                       </div>
                       {user.phone && (
-                        <p className="text-[10px] text-[#F3E5AB] font-mono" dir="ltr">
+                        <p className="text-[10px] text-[#8B6914] font-mono font-bold" dir="ltr">
                           {user.phone}
                         </p>
                       )}
@@ -193,7 +193,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setIsUserMenuOpen(false);
                         onOpenMyOrders();
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-[#1B1B28] rounded-xl transition-colors cursor-pointer text-right"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-950 hover:bg-[#FAF7EF] rounded-xl transition-colors cursor-pointer text-right"
                     >
                       <Package className="w-3.5 h-3.5 text-[#D4AF37]" />
                       <span>طلباتي السابقة وتتبع الشحن</span>
@@ -207,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsUserMenuOpen(false);
                           onOpenNotifications();
                         }}
-                        className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-[#1B1B28] rounded-xl transition-colors cursor-pointer text-right"
+                        className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-950 hover:bg-[#FAF7EF] rounded-xl transition-colors cursor-pointer text-right"
                       >
                         <div className="flex items-center gap-2">
                           <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -226,14 +226,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <button
                         type="button"
                         onClick={handleInstallClick}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-[#F3E5AB] hover:bg-[#1E1B13] rounded-xl transition-colors cursor-pointer text-right border border-[#D4AF37]/20"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-[#8B6914] hover:bg-[#FAF4E4] rounded-xl transition-colors cursor-pointer text-right border border-[#D4AF37]/30"
                       >
                         <Smartphone className="w-3.5 h-3.5 text-[#D4AF37]" />
                         <span>تثبيت تطبيق المتجر على هاتفك</span>
                       </button>
                     )}
 
-                    <div className="h-[1px] bg-neutral-800/80 my-1" />
+                    <div className="h-[1px] bg-[#E8E2D2] my-1" />
 
                     {/* Logout Button */}
                     <button
@@ -242,9 +242,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setIsUserMenuOpen(false);
                         onLogout();
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded-xl transition-colors cursor-pointer text-right"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors cursor-pointer text-right"
                     >
-                      <LogOut className="w-3.5 h-3.5 text-red-400" />
+                      <LogOut className="w-3.5 h-3.5 text-red-500" />
                       <span>تسجيل الخروج من الحساب</span>
                     </button>
                   </motion.div>
@@ -258,10 +258,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               type="button"
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] sm:text-xs font-bold text-neutral-200 bg-[#14141C] border border-neutral-700 hover:border-[#D4AF37] rounded-xl hover:text-[#F3E5AB] transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] sm:text-xs font-bold text-neutral-800 bg-[#FAF7EF] border border-[#D4AF37]/45 hover:border-[#D4AF37] rounded-xl hover:text-black transition-colors shadow-xs cursor-pointer"
               title="تسجيل الدخول / فتح الحساب"
             >
-              <UserIcon className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <UserIcon className="w-3.5 h-3.5 text-[#B8860B]" />
               <span className="hidden sm:inline">حسابي / تسجيل الدخول</span>
               <span className="sm:hidden font-bold">دخول</span>
             </motion.button>
@@ -275,9 +275,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onOpenCart}
             aria-label="حقيبة التسوق"
-            className="relative p-2 rounded-xl bg-[#14141C] border border-[#D4AF37]/45 text-[#F3E5AB] hover:border-[#D4AF37] transition-colors cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.12)]"
+            className="relative p-2 rounded-xl bg-[#FAF7EF] border border-[#D4AF37]/50 text-[#8B6914] hover:border-[#D4AF37] transition-colors cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.15)]"
           >
-            <ShoppingBag className="w-4 h-4 text-[#D4AF37]" />
+            <ShoppingBag className="w-4 h-4 text-[#B8860B]" />
             <AnimatePresence>
               {cartCount > 0 && (
                 <motion.span

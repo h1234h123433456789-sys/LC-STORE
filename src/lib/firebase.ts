@@ -2,6 +2,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
+  setLogLevel,
   collection, 
   doc, 
   setDoc, 
@@ -37,11 +39,32 @@ export interface FirestoreErrorInfo {
   };
 }
 
+// Suppress noisy internal @firebase/firestore 10-second connection timeout warnings
+// when operating on mobile networks or switching to offline cache mode.
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore
+}
+
 // Initialize Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// CRITICAL: The app will use the explicit databaseId from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// CRITICAL: The app will use the explicit databaseId from config with auto-detect long polling
+// to avoid WebChannel 10-second connection timeouts on mobile/proxy networks.
+export const db = (() => {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalAutoDetectLongPolling: true,
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+})();
 export const auth = getAuth(app);
 
 // Universal helper to recursively strip out any 'undefined' values from objects before writing to Firestore.
@@ -77,14 +100,27 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
+
+  const lowerMsg = errMessage.toLowerCase();
+  const isTransientOffline =
+    lowerMsg.includes('client is offline') ||
+    lowerMsg.includes('could not reach cloud firestore backend') ||
+    lowerMsg.includes('unavailable') ||
+    lowerMsg.includes('network-request-failed');
+
+  if (isTransientOffline) {
+    console.warn('Firestore operating in offline/cached mode:', errInfo.path);
+    return errInfo;
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 
   // Check if error is related to Firestore Daily Quota Limits (resource-exhausted / quota exceeded)
   const isQuota = 
-    errMessage.toLowerCase().includes('quota') || 
-    errMessage.toLowerCase().includes('resource-exhausted') ||
-    errMessage.toLowerCase().includes('resource_exhausted') ||
-    errMessage.toLowerCase().includes('limit exceeded');
+    lowerMsg.includes('quota') || 
+    lowerMsg.includes('resource-exhausted') ||
+    lowerMsg.includes('resource_exhausted') ||
+    lowerMsg.includes('limit exceeded');
 
   if (isQuota) {
     setQuotaExceededInSession();

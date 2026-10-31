@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -14,9 +14,10 @@ import {
   Sparkles,
   ArrowRight,
   Plus,
-  Minus
+  Minus,
+  Package
 } from 'lucide-react';
-import { Product, FreeShippingConfig } from '../types';
+import { Product, FreeShippingConfig, getProductVariants } from '../types';
 import { formatPrice, toIQD } from '../utils/formatters';
 import { ImageLightboxModal } from './ImageLightboxModal';
 
@@ -26,8 +27,8 @@ interface ProductDetailModalProps {
   freeShippingConfig?: FreeShippingConfig;
   isCovered?: boolean;
   onClose: () => void;
-  onAddToCart: (product: Product, quantity: number, selectedSize?: string) => void;
-  onBuyNow: (product: Product, quantity: number, selectedSize?: string) => void;
+  onAddToCart: (product: Product, quantity: number, selectedOption?: string) => void;
+  onBuyNow: (product: Product, quantity: number, selectedOption?: string) => void;
   onOpenZoom?: (images: string[], initialIndex: number, title: string) => void;
 }
 
@@ -43,10 +44,84 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
   const [addedNotice, setAddedNotice] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  const variants = getProductVariants(product);
+  const firstAvailableVariant = variants.find((v) => v.stockCount > 0) || variants[0];
+
+  const [selectedOption, setSelectedOption] = useState<string>(() => firstAvailableVariant?.name || '');
+
+  // Build complete list of images for this product safely (including any variant-linked images)
+  const imagesList: string[] = [];
+  if (product?.images && product.images.length > 0) {
+    product.images.forEach((img) => {
+      if (img && typeof img === 'string' && img.trim() && !imagesList.includes(img.trim())) {
+        imagesList.push(img.trim());
+      }
+    });
+  }
+  if (imagesList.length === 0 && product?.image) {
+    imagesList.push(product.image);
+  }
+  variants.forEach((v) => {
+    if (v.image && v.image.trim() && !imagesList.includes(v.image.trim())) {
+      imagesList.push(v.image.trim());
+    }
+  });
+  if (imagesList.length === 0) {
+    imagesList.push('https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop');
+  }
+
+  // Synchronously reset state when product changes to avoid post-paint re-render blink
+  const [prevProductId, setPrevProductId] = useState<string | undefined>(product?.id);
+  if (product?.id !== prevProductId) {
+    setPrevProductId(product?.id);
+    const defaultVar = variants.find((v) => v.stockCount > 0) || variants[0];
+    setSelectedOption(defaultVar?.name || '');
+    const defaultImgIdx = defaultVar?.image ? Math.max(0, imagesList.indexOf(defaultVar.image)) : 0;
+    setSelectedImageIndex(defaultImgIdx);
+    setQuantity(1);
+    setAddedNotice(false);
+    setIsZoomed(false);
+  }
+
+  const activeVariant =
+    variants.length > 0
+      ? variants.find((v) => v.name === selectedOption) || firstAvailableVariant
+      : undefined;
+
+  const effectiveSelectedOption = activeVariant?.name;
+
+  const totalProductStock = product
+    ? variants.length > 0
+      ? variants.reduce((sum, v) => sum + Math.max(0, v.stockCount), 0)
+      : product.inStock === false
+      ? 0
+      : typeof product.stockCount === 'number'
+      ? Math.max(0, product.stockCount)
+      : 10
+    : 0;
+
+  const stockCount = activeVariant ? Math.max(0, activeVariant.stockCount) : totalProductStock;
+  const isOutOfStock = stockCount <= 0;
+
+  const handleSelectVariant = (varName: string) => {
+    setSelectedOption(varName);
+    const targetVar = variants.find((v) => v.name === varName);
+    if (targetVar) {
+      if (targetVar.image) {
+        const idx = imagesList.indexOf(targetVar.image);
+        if (idx >= 0) {
+          setSelectedImageIndex(idx);
+        }
+      }
+      if (targetVar.stockCount > 0 && quantity > targetVar.stockCount) {
+        setQuantity(targetVar.stockCount);
+      }
+    }
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
@@ -64,33 +139,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setTouchStartX(null);
   };
 
-  // Synchronously reset state when product changes to avoid post-paint re-render blink
-  const [prevProductId, setPrevProductId] = useState<string | undefined>(product?.id);
-  if (product?.id !== prevProductId) {
-    setPrevProductId(product?.id);
-    setSelectedImageIndex(0);
-    setQuantity(1);
-    setSelectedSize(product?.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
-    setAddedNotice(false);
-    setIsZoomed(false);
-  }
-
-  // Build complete list of images for this product safely
-  const imagesList: string[] = [];
-  if (product?.images && product.images.length > 0) {
-    product.images.forEach((img) => {
-      if (img && typeof img === 'string' && img.trim()) {
-        imagesList.push(img.trim());
-      }
-    });
-  }
-  if (imagesList.length === 0 && product?.image) {
-    imagesList.push(product.image);
-  }
-  if (imagesList.length === 0) {
-    imagesList.push('https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop');
-  }
-
   const currentImage = imagesList[selectedImageIndex] || imagesList[0];
 
   const handlePrevImage = (e?: React.MouseEvent) => {
@@ -104,18 +152,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   const handleAdd = () => {
-    if (product) {
-      const finalSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
-      onAddToCart(product, quantity, finalSize);
+    if (product && !isOutOfStock) {
+      const safeQty = Math.min(quantity, stockCount);
+      onAddToCart(product, safeQty, effectiveSelectedOption);
       setAddedNotice(true);
       setTimeout(() => setAddedNotice(false), 2200);
     }
   };
 
   const handleBuy = () => {
-    if (product) {
-      const finalSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
-      onBuyNow(product, quantity, finalSize);
+    if (product && !isOutOfStock) {
+      const safeQty = Math.min(quantity, stockCount);
+      onBuyNow(product, safeQty, effectiveSelectedOption);
     }
   };
 
@@ -133,39 +181,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          className={`fixed inset-0 z-[100] w-full h-[100dvh] bg-[#07070A] overflow-hidden text-right ${isCovered ? 'hidden' : ''}`}
+          className={`fixed inset-0 z-[100] w-full h-[100dvh] bg-white overflow-hidden text-right ${isCovered ? 'hidden' : ''}`}
         >
-          {/* Dynamic High-Visibility Luxury Gold Ambient Lighting */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
-            <div 
-              className="absolute inset-0" 
-              style={{
-                background: `
-                  radial-gradient(ellipse 85% 50% at 50% 0%, rgba(212,175,55,0.22) 0%, transparent 70%),
-                  radial-gradient(ellipse 75% 50% at 50% 100%, rgba(185,135,28,0.18) 0%, transparent 72%)
-                `
-              }}
-            />
-            <div 
-              className="absolute -top-32 -right-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-1" 
-              style={{ 
-                background: 'radial-gradient(circle, rgba(255,215,65,0.28) 0%, rgba(212,175,55,0.14) 35%, rgba(212,175,55,0.04) 58%, transparent 75%)'
-              }} 
-            />
-            <div 
-              className="absolute -bottom-32 -left-24 w-[480px] sm:w-[700px] h-[480px] sm:h-[700px] rounded-full animate-gold-flow-2" 
-              style={{ 
-                background: 'radial-gradient(circle, rgba(245,195,45,0.24) 0%, rgba(212,175,55,0.11) 38%, rgba(212,175,55,0.03) 60%, transparent 75%)'
-              }} 
-            />
-            <div 
-              className="absolute top-1/4 left-1/5 w-[400px] sm:w-[580px] h-[400px] sm:h-[580px] rounded-full animate-gold-breath" 
-              style={{ 
-                background: 'radial-gradient(circle, rgba(255,220,90,0.18) 0%, rgba(212,175,55,0.08) 40%, transparent 72%)'
-              }} 
-            />
-          </div>
-
           {/* Animated Full-Screen Modal Content Container */}
           <motion.div
             initial={{ scale: 0.96, y: 18 }}
@@ -175,28 +192,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             className="relative z-10 w-full h-full flex flex-col overflow-hidden"
           >
             {/* Top Sticky Header Bar */}
-            <header className="sticky top-0 z-30 w-full bg-[#0F0F15] border-b border-[#D4AF37]/20 px-4 sm:px-8 py-3 flex items-center justify-between shrink-0 shadow-md">
+            <header className="sticky top-0 z-30 w-full bg-white/95 backdrop-blur-md border-b border-[#D4AF37]/30 px-4 sm:px-8 py-3 flex items-center justify-between shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
                 <button
                   onClick={onClose}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#181822] hover:bg-[#222230] border border-[#D4AF37]/40 text-[#F3E5AB] font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FAF7EF] hover:bg-[#F3ECE0] border border-[#D4AF37]/45 text-[#7A5912] font-bold text-xs transition-all cursor-pointer active:scale-95"
                 >
-                  <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
+                  <ArrowRight className="w-4 h-4 text-[#B8860B]" />
                   <span>العودة للمتجر</span>
                 </button>
-                <span className="text-xs font-semibold text-neutral-400 hidden sm:inline-block">
+                <span className="text-xs font-semibold text-neutral-500 hidden sm:inline-block">
                   تفاصيل ومعاينة المنتج
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-[#F3E5AB] bg-[#181822] px-3 py-1 rounded-full border border-[#D4AF37]/30">
+                <span className="text-xs font-bold text-[#7A5912] bg-[#FAF7EF] px-3 py-1 rounded-full border border-[#D4AF37]/40">
                   {product.categoryLabel || 'معروضات LC'}
                 </span>
                 <button
                   onClick={onClose}
                   aria-label="إغلاق"
-                  className="p-1.5 rounded-full bg-[#161620] text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer active:scale-90"
+                  className="p-1.5 rounded-full bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/30 transition-colors cursor-pointer active:scale-90"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -215,7 +232,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   initial={{ x: 20 }}
                   animate={{ x: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-                  className="bg-[#0E0E14] border border-[#D4AF37]/25 rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-4 shadow-xl relative"
+                  className="bg-white border border-[#D4AF37]/35 rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-4 shadow-[0_8px_30px_rgba(212,175,55,0.12)] relative"
                 >
                   {/* Main Image Stage */}
                   <div 
@@ -228,7 +245,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     }}
                     onTouchStart={handleTouchStart}
                     onTouchEnd={handleTouchEnd}
-                    className="relative w-full aspect-square max-h-[360px] sm:max-h-[400px] bg-[#0B0B10] rounded-xl overflow-hidden flex items-center justify-center border border-[#D4AF37]/25 group cursor-zoom-in shadow-inner select-none"
+                    className="relative w-full aspect-square max-h-[360px] sm:max-h-[400px] bg-white rounded-xl overflow-hidden flex items-center justify-center border border-[#D4AF37]/30 group cursor-zoom-in select-none"
                     title="اضغط لتكبير وعرض الصورة بالحجم الكامل (أو اسحب للتنقل بين الصور)"
                   >
                     {/* Main Product Image with Smooth Crossfade */}
@@ -252,8 +269,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                     {/* Top-Right Badge: Photo Counter */}
                     {imagesList.length > 1 && (
-                      <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/85 border border-[#D4AF37]/50 text-[#F3E5AB] text-xs font-mono font-bold shadow-md">
-                        <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                      <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 border border-[#D4AF37]/50 text-[#7A5912] text-xs font-mono font-bold shadow-sm">
+                        <Sparkles className="w-3 h-3 text-[#B8860B]" />
                         <span>{selectedImageIndex + 1} / {imagesList.length}</span>
                       </div>
                     )}
@@ -269,16 +286,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           setIsZoomed(true);
                         }
                       }}
-                      className="absolute bottom-2.5 left-2.5 px-2.5 py-1.5 rounded-xl bg-black/85 text-white hover:text-[#D4AF37] border border-[#D4AF37]/50 transition-all cursor-pointer shadow-md flex items-center gap-1.5 active:scale-95 z-20"
+                      className="absolute bottom-2.5 left-2.5 px-2.5 py-1.5 rounded-xl bg-white/95 text-neutral-800 hover:text-[#8B6914] border border-[#D4AF37]/50 transition-all cursor-pointer shadow-sm flex items-center gap-1.5 active:scale-95 z-20"
                       title="تكبير وعرض الصورة بالحجم الكامل"
                     >
-                      <Maximize2 className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <Maximize2 className="w-3.5 h-3.5 text-[#B8860B]" />
                       <span className="text-xs font-bold">تكبير الصورة</span>
                     </button>
 
                     {/* Swipe hint on mobile */}
                     {imagesList.length > 1 && (
-                      <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/75 text-neutral-300 text-[10px] font-medium pointer-events-none border border-neutral-800">
+                      <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-white/90 text-neutral-600 text-[10px] font-medium pointer-events-none border border-[#D4AF37]/30">
                         <span>اسحب للتنقل ↔</span>
                       </div>
                     )}
@@ -290,7 +307,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           type="button"
                           onClick={handlePrevImage}
                           aria-label="الصورة السابقة"
-                          className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/80 text-white hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/40 transition-all cursor-pointer shadow-md z-20 active:scale-90"
+                          className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 text-neutral-800 hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/45 transition-all cursor-pointer shadow-md z-20 active:scale-90"
                         >
                           <ChevronRight className="w-5 h-5" />
                         </button>
@@ -298,7 +315,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           type="button"
                           onClick={handleNextImage}
                           aria-label="الصورة التالية"
-                          className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/80 text-white hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/40 transition-all cursor-pointer shadow-md z-20 active:scale-90"
+                          className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 text-neutral-800 hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/45 transition-all cursor-pointer shadow-md z-20 active:scale-90"
                         >
                           <ChevronLeft className="w-5 h-5" />
                         </button>
@@ -309,12 +326,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   {/* Thumbnails Row */}
                   {imagesList.length > 1 && (
                     <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between text-xs text-neutral-300 font-medium px-1">
+                      <div className="flex items-center justify-between text-xs text-neutral-600 font-medium px-1">
                         <span className="flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                          <Sparkles className="w-3.5 h-3.5 text-[#B8860B]" />
                           <span>معرض الصور ({imagesList.length} صور متوفرة)</span>
                         </span>
-                        <span className="text-[11px] text-[#D4AF37]">اضغط للمعاينة</span>
+                        <span className="text-[11px] text-[#8B6914] font-semibold">اضغط للمعاينة</span>
                       </div>
                       
                       <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -325,10 +342,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               key={index}
                               type="button"
                               onClick={() => setSelectedImageIndex(index)}
-                              className={`relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] rounded-xl overflow-hidden border-2 shrink-0 transition-all p-1 flex items-center justify-center cursor-pointer ${
+                              className={`relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] rounded-xl overflow-hidden border-2 shrink-0 transition-all p-1 flex items-center justify-center cursor-pointer bg-white ${
                                 isSelected
-                                  ? 'border-[#D4AF37] bg-[#221F14] ring-1 ring-[#D4AF37]/50 scale-105'
-                                  : 'border-neutral-700/80 bg-[#14141E] opacity-75 hover:opacity-100 hover:border-[#D4AF37]/60'
+                                  ? 'border-[#D4AF37] ring-1 ring-[#D4AF37]/50 scale-105'
+                                  : 'border-[#D4AF37]/25 opacity-75 hover:opacity-100 hover:border-[#D4AF37]/60'
                               }`}
                             >
                               <img
@@ -337,7 +354,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                 className="w-full h-full object-contain"
                               />
                               <span className={`absolute bottom-0.5 right-0.5 text-[9px] font-mono px-1 rounded-sm leading-none ${
-                                isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'bg-black/85 text-white'
+                                isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'bg-neutral-800 text-white'
                               }`}>
                                 {index + 1}
                               </span>
@@ -354,36 +371,46 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   initial={{ x: -20 }}
                   animate={{ x: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-                  className="bg-[#0E0E14] border border-[#D4AF37]/25 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl"
+                  className="bg-white border border-[#D4AF37]/35 rounded-2xl p-4 sm:p-6 space-y-4 shadow-[0_8px_30px_rgba(212,175,55,0.12)]"
                 >
-                  {/* Category & Availability */}
-                  <div className="flex items-center justify-between text-xs pb-3 border-b border-neutral-800">
-                    <div className="flex items-center gap-1.5 text-[#F3E5AB]">
-                      <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                      <span className="text-xs font-semibold bg-[#181822] px-3 py-1 rounded-lg border border-[#D4AF37]/30">
+                  {/* Category & Stock Availability */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-3 border-b border-[#D4AF37]/20">
+                    <div className="flex items-center gap-1.5 text-[#7A5912]">
+                      <Sparkles className="w-4 h-4 text-[#B8860B]" />
+                      <span className="text-xs font-bold bg-[#FAF7EF] px-3 py-1 rounded-lg border border-[#D4AF37]/35">
                         {product.categoryLabel}
                       </span>
                     </div>
                     <div>
-                      <span className="text-emerald-400 font-semibold text-xs bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-500/30 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>متاح للطلب والتسليم الفوري</span>
-                      </span>
+                      {isOutOfStock ? (
+                        <span className="text-red-700 font-bold text-xs bg-red-50 px-2.5 py-1 rounded-lg border border-red-200 flex items-center gap-1">
+                          <span>{activeVariant ? `نفذ مخزون (${activeVariant.name})` : 'نفذت الكمية من المخزون'}</span>
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 font-bold text-xs bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>
+                            {activeVariant
+                              ? `المخزون المتوفر (${activeVariant.name}): ${stockCount} قطعة`
+                              : `المخزون المتوفر: ${stockCount} قطعة`}
+                          </span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Title */}
-                  <h1 className="text-lg sm:text-2xl font-extrabold text-white leading-snug">
+                  <h1 className="text-lg sm:text-2xl font-extrabold text-neutral-900 leading-snug">
                     {product.name}
                   </h1>
 
                   {/* Price Banner with Delivery Fee & Free Shipping Promo */}
-                  <div className="bg-[#14141E] p-3.5 sm:p-4 rounded-xl border border-[#D4AF37]/35 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-[#D4AF37] font-medium pb-2 border-b border-neutral-800/80">
+                  <div className="bg-[#FAF7EF] p-3.5 sm:p-4 rounded-xl border border-[#D4AF37]/40 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-[#8B6914] font-semibold pb-2 border-b border-[#D4AF37]/20">
                       <div className="flex items-center gap-1.5">
-                        <Truck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <Truck className="w-3.5 h-3.5 text-[#B8860B]" />
                         {qualifiesForFreeShippingAlone ? (
-                          <span className="text-emerald-300 font-bold">
+                          <span className="text-emerald-700 font-bold">
                             🎉 هذا الطلب مؤهل للتوصيل المجاني الفوري!
                           </span>
                         ) : (
@@ -391,22 +418,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         )}
                       </div>
                       {isPromoEnabled && !qualifiesForFreeShippingAlone ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
                           توصيل مجاني للطلبات فوق {formatPrice(minAmountIQD, 'IQD')}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-neutral-400">لكافة محافظات العراق</span>
+                        <span className="text-[10px] text-neutral-500">لكافة محافظات العراق</span>
                       )}
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-neutral-300 font-semibold">سعر القطعة الواحدة:</span>
+                      <span className="text-xs text-neutral-700 font-bold">سعر القطعة الواحدة:</span>
                       <div className="flex items-baseline gap-2.5">
                         <span className="text-xl sm:text-2xl font-black gold-gradient-text tabular-nums font-mono">
                           {formatPrice(product.priceUSD, currency)}
                         </span>
                         {product.originalPriceUSD && (
-                          <span className="text-xs sm:text-sm text-neutral-500 line-through tabular-nums font-mono">
+                          <span className="text-xs sm:text-sm text-neutral-400 line-through tabular-nums font-mono">
                             {formatPrice(product.originalPriceUSD, currency)}
                           </span>
                         )}
@@ -415,26 +442,26 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
 
                   {/* Detailed Description */}
-                  <div className="bg-[#12121A] p-3.5 rounded-xl border border-neutral-800/90 space-y-1.5">
-                    <h3 className="text-xs font-bold text-[#D4AF37] flex items-center gap-1.5">
+                  <div className="bg-[#FAF8F2] p-3.5 rounded-xl border border-[#D4AF37]/25 space-y-1.5">
+                    <h3 className="text-xs font-bold text-[#8B6914] flex items-center gap-1.5">
                       <span>تفاصيل ومواصفات المنتج:</span>
                     </h3>
-                    <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed whitespace-pre-line">
+                    <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed whitespace-pre-line">
                       {product.description || product.shortDesc || 'منتج فاخر معروض بمتجر LC الرسمي مع خدمة التوصيل السريع والدفع كاش عند التسليم.'}
                     </p>
                   </div>
 
                   {/* Specs Matrix */}
                   <div className="grid grid-cols-2 gap-2.5 text-xs">
-                    <div className="bg-[#13131C] p-3 rounded-xl border border-neutral-800/80">
+                    <div className="bg-[#FAF8F2] p-3 rounded-xl border border-[#D4AF37]/25">
                       <span className="text-neutral-500 block text-[10px] mb-0.5">الجودة والخامة</span>
-                      <span className="font-bold text-xs text-white">
+                      <span className="font-bold text-xs text-neutral-900">
                         {product.specs?.material || 'خامات أصلية فاخرة'}
                       </span>
                     </div>
-                    <div className="bg-[#13131C] p-3 rounded-xl border border-neutral-800/80">
+                    <div className="bg-[#FAF8F2] p-3 rounded-xl border border-[#D4AF37]/25">
                       <span className="text-neutral-500 block text-[10px] mb-0.5">حالة المنتج والتغليف</span>
-                      <span className="font-bold text-xs text-white">
+                      <span className="font-bold text-xs text-neutral-900">
                         {product.specs?.warranty && !product.specs.warranty.includes('فحص') && !product.specs.warranty.includes('معاينة') && !product.specs.warranty.includes('ضمان')
                           ? product.specs.warranty
                           : 'جديد أصلي 100% بتغليف المصنع'}
@@ -442,35 +469,54 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Sizes Selection */}
-                  {product.sizes && product.sizes.length > 0 && (
-                    <div className="bg-[#13131C] p-3.5 rounded-xl border border-[#D4AF37]/35 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>القياس المطلوب:</span>
-                          {selectedSize && (
-                            <span className="text-[#F3E5AB] font-bold">({selectedSize})</span>
-                          )}
+                  {/* Custom Product Options / Variants Selector (Shown ONLY if admin added options) */}
+                  {variants.length > 0 && (
+                    <div className="bg-[#FAF7EF] p-3.5 rounded-xl border border-[#D4AF37]/40 space-y-2.5">
+                      <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                        <span className="font-extrabold text-neutral-900">
+                          {product.customOptionLabel?.trim() || 'اختر اللون / النوع المطلوب'}:
                         </span>
-                        <span className="text-[11px] text-[#D4AF37] font-medium">اختر قياسك</span>
+                        {activeVariant && (
+                          <span className="text-[11px] font-bold text-[#7A5912] bg-white px-2.5 py-0.5 rounded-lg border border-[#D4AF37]/40">
+                            المحدد: {activeVariant.name} ({activeVariant.stockCount > 0 ? `متوفر ${activeVariant.stockCount} قطعة` : 'نفذ من المخزون'})
+                          </span>
+                        )}
                       </div>
-
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {product.sizes.map((sz) => {
-                          const isSelected = selectedSize === sz;
+                      <div className="flex flex-wrap gap-2">
+                        {variants.map((v) => {
+                          const isSelected = effectiveSelectedOption === v.name;
+                          const isVarOut = v.stockCount <= 0;
                           return (
                             <button
+                              key={v.name}
                               type="button"
-                              key={sz}
-                              onClick={() => setSelectedSize(sz)}
-                              className={`min-w-10 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 ${
+                              onClick={() => handleSelectVariant(v.name)}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 active:scale-95 ${
                                 isSelected
-                                  ? 'bg-[#D4AF37] text-black shadow-md scale-105 ring-1 ring-[#F3E5AB]'
-                                  : 'bg-[#1A1A25] hover:bg-[#232332] text-neutral-200 border border-neutral-700/80 hover:border-[#D4AF37]/50'
+                                  ? 'gold-gradient-bg text-black border-[#D4AF37] font-extrabold shadow-xs ring-2 ring-[#D4AF37]/40'
+                                  : isVarOut
+                                  ? 'bg-neutral-100 text-neutral-400 border-neutral-200 opacity-75'
+                                  : 'bg-white text-neutral-800 border-[#D4AF37]/35 hover:border-[#D4AF37]'
                               }`}
                             >
-                              {isSelected && <span>✓</span>}
-                              <span>{sz}</span>
+                              {v.image && (
+                                <img
+                                  src={v.image}
+                                  alt={v.name}
+                                  className="w-6 h-6 rounded-md object-contain bg-white border border-black/15 p-0.5 shrink-0"
+                                />
+                              )}
+                              <div className="text-right">
+                                <span className="block leading-tight">{v.name}</span>
+                                <span
+                                  className={`block text-[10px] font-mono leading-tight mt-0.5 ${
+                                    isSelected ? 'text-black/80 font-extrabold' : isVarOut ? 'text-red-600' : 'text-[#8B6914]'
+                                  }`}
+                                >
+                                  {isVarOut ? 'نفذ من المخزون' : `المتوفر: ${v.stockCount}`}
+                                </span>
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-black shrink-0" />}
                             </button>
                           );
                         })}
@@ -478,29 +524,36 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </div>
                   )}
 
-                  {/* Quantity Selector Box */}
-                  <div className="bg-[#13131C] p-3 rounded-xl border border-neutral-800/90 flex items-center justify-between">
+                  {/* Quantity Selector Box (Capped at stockCount) */}
+                  <div className="bg-[#FAF7EF] p-3 rounded-xl border border-[#D4AF37]/30 flex items-center justify-between">
                     <div className="text-xs">
-                      <span className="font-bold text-white block">الكمية المطلوبة:</span>
+                      <span className="font-bold text-neutral-900 block">
+                        الكمية المطلوبة {stockCount > 0 ? `(المتوفر${activeVariant ? ` لـ ${activeVariant.name}` : ''}: ${stockCount})` : '(نفذ المخزون)'}:
+                      </span>
                       {quantity > 1 && (
-                        <span className="text-[11px] text-[#F3E5AB] font-mono">
+                        <span className="text-[11px] text-[#8B6914] font-bold font-mono">
                           المجموع: {formatPrice(currentTotalIQD, 'IQD')}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 bg-[#1A1A26] border border-[#D4AF37]/30 rounded-xl p-1">
+                    <div className="flex items-center gap-1 bg-white border border-[#D4AF37]/40 rounded-xl p-1 shadow-xs">
                       <button
                         type="button"
+                        disabled={isOutOfStock || quantity <= 1}
                         onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors cursor-pointer active:scale-90"
+                        className="p-1.5 rounded-lg hover:bg-[#FAF7EF] text-neutral-700 hover:text-neutral-900 disabled:opacity-40 transition-colors cursor-pointer active:scale-90"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="px-3.5 text-sm font-extrabold text-[#F3E5AB] font-mono">{quantity}</span>
+                      <span className="px-3.5 text-sm font-extrabold text-[#7A5912] font-mono">
+                        {isOutOfStock ? 0 : quantity}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => setQuantity((q) => q + 1)}
-                        className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors cursor-pointer active:scale-90"
+                        disabled={isOutOfStock || quantity >= stockCount}
+                        onClick={() => setQuantity((q) => Math.min(stockCount, q + 1))}
+                        className="p-1.5 rounded-lg hover:bg-[#FAF7EF] text-neutral-700 hover:text-neutral-900 disabled:opacity-40 transition-colors cursor-pointer active:scale-90"
+                        title={quantity >= stockCount ? 'وصلت للحد الأقصى المتوفر في المخزون' : 'زيادة الكمية'}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -508,55 +561,65 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="pt-2.5 border-t border-neutral-800/80 space-y-3">
+                  <div className="pt-2.5 border-t border-[#D4AF37]/20 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.96 }}
+                        whileHover={isOutOfStock ? undefined : { scale: 1.02 }}
+                        whileTap={isOutOfStock ? undefined : { scale: 0.96 }}
+                        disabled={isOutOfStock}
                         onClick={handleAdd}
-                        className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-bold text-[#F3E5AB] bg-[#181822] border border-[#D4AF37]/50 hover:border-[#D4AF37] rounded-xl transition-colors cursor-pointer"
+                        className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-bold rounded-xl transition-colors ${
+                          isOutOfStock
+                            ? 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed'
+                            : 'text-[#7A5912] bg-[#FAF7EF] border border-[#D4AF37]/55 hover:border-[#D4AF37] hover:bg-[#F3ECE0] cursor-pointer'
+                        }`}
                       >
                         {addedNotice ? (
                           <>
-                            <Check className="w-4 h-4 text-emerald-400" />
-                            <span className="text-emerald-400 font-extrabold">تمت الإضافة للسلة!</span>
+                            <Check className="w-4 h-4 text-emerald-600" />
+                            <span className="text-emerald-700 font-extrabold">تمت الإضافة للسلة!</span>
                           </>
                         ) : (
                           <>
-                            <ShoppingBag className="w-4 h-4 text-[#D4AF37]" />
-                            <span>إضافة إلى السلة</span>
+                            <ShoppingBag className={`w-4 h-4 ${isOutOfStock ? 'text-neutral-400' : 'text-[#B8860B]'}`} />
+                            <span>{isOutOfStock ? 'نفذت الكمية' : 'إضافة إلى السلة'}</span>
                           </>
                         )}
                       </motion.button>
 
                       <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.96 }}
+                        whileHover={isOutOfStock ? undefined : { scale: 1.02 }}
+                        whileTap={isOutOfStock ? undefined : { scale: 0.96 }}
+                        disabled={isOutOfStock}
                         onClick={handleBuy}
-                        className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-black text-black gold-gradient-bg hover:brightness-110 rounded-xl transition-[filter] cursor-pointer shadow-[0_0_20px_rgba(212,175,55,0.28)]"
+                        className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-black rounded-xl transition-[filter] ${
+                          isOutOfStock
+                            ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                            : 'text-black gold-gradient-bg hover:brightness-110 cursor-pointer shadow-[0_4px_20px_rgba(212,175,55,0.32)]'
+                        }`}
                       >
-                        <Zap className="w-4 h-4 fill-black" />
-                        <span>طلب فوري كاش</span>
+                        <Zap className={`w-4 h-4 ${isOutOfStock ? 'text-neutral-400' : 'fill-black'}`} />
+                        <span>{isOutOfStock ? 'غير متوفر حالياً' : 'طلب فوري كاش'}</span>
                       </motion.button>
                     </div>
 
-                    <p className="text-center text-[11px] text-neutral-400">
+                    <p className="text-center text-[11px] text-neutral-500">
                       تدفع المبلغ نقداً للمندوب عند استلام الطلب في محافظتك
                     </p>
 
                     {/* Guarantees Matrix */}
-                    <div className="pt-2.5 border-t border-neutral-800/80 grid grid-cols-3 gap-2 text-center text-xs text-neutral-300">
-                      <div className="bg-[#12121A] p-2 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                        <Banknote className="w-3.5 h-3.5 text-[#D4AF37]" />
-                        <span className="text-[10.5px] font-medium">الدفع نقداً كاش</span>
+                    <div className="pt-2.5 border-t border-[#D4AF37]/20 grid grid-cols-3 gap-2 text-center text-xs text-neutral-700">
+                      <div className="bg-[#FAF8F2] p-2 rounded-xl border border-[#D4AF37]/25 flex flex-col items-center gap-1">
+                        <Banknote className="w-3.5 h-3.5 text-[#B8860B]" />
+                        <span className="text-[10.5px] font-semibold">الدفع نقداً كاش</span>
                       </div>
-                      <div className="bg-[#12121A] p-2 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                        <Truck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                        <span className="text-[10.5px] font-medium">توصيل سريع</span>
+                      <div className="bg-[#FAF8F2] p-2 rounded-xl border border-[#D4AF37]/25 flex flex-col items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-[#B8860B]" />
+                        <span className="text-[10.5px] font-semibold">توصيل سريع</span>
                       </div>
-                      <div className="bg-[#12121A] p-2 rounded-xl border border-neutral-800/80 flex flex-col items-center gap-1">
-                        <PackageCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                        <span className="text-[10.5px] font-medium">تغليف محكم وأصلي</span>
+                      <div className="bg-[#FAF8F2] p-2 rounded-xl border border-[#D4AF37]/25 flex flex-col items-center gap-1">
+                        <PackageCheck className="w-3.5 h-3.5 text-[#B8860B]" />
+                        <span className="text-[10.5px] font-semibold">تغليف محكم وأصلي</span>
                       </div>
                     </div>
                   </div>

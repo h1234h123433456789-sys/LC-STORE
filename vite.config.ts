@@ -17,8 +17,8 @@ export default defineConfig(() => {
           name: 'متجر LC الرسمي',
           short_name: 'متجر LC الرسمي',
           description: 'المتجر العراقي الأول للمعروضات الحصرية الفاخرة مع خدمة التوصيل السريع والدفع كاش عند الاستلام لكافة المحافظات.',
-          theme_color: '#080809',
-          background_color: '#080809',
+          theme_color: '#FFFFFF',
+          background_color: '#FFFFFF',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
@@ -27,19 +27,19 @@ export default defineConfig(() => {
           dir: 'rtl',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: '/pwa-192x192.png?v=white',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: '/pwa-512x512.png?v=white',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: '/pwa-maskable-512x512.png?v=white',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -47,6 +47,10 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {

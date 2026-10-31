@@ -1,23 +1,17 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   Edit3, 
   Trash2, 
-  Check, 
   X, 
   Layers, 
   CheckCircle2, 
-  Package, 
   FolderPlus,
   Tag,
-  Sparkles,
-  ArrowRight,
-  Search,
-  SlidersHorizontal,
-  ChevronDown
+  Search
 } from 'lucide-react';
 import { Product, ProductList } from '../types';
-import { formatPrice } from '../utils/formatters';
 
 interface ProductListsManagerProps {
   lists: ProductList[];
@@ -30,7 +24,6 @@ interface ProductListsManagerProps {
   onDeleteCategory?: (cat: string) => void;
 }
 
-// Helper to parse multiple categories separated by comma, arabic comma, newline, or pipe
 const parseCategoriesInput = (raw: string): string[] => {
   return raw
     .split(/[,،\n|]+/)
@@ -48,36 +41,27 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
   onAddCategories,
   onDeleteCategory
 }) => {
-  // Master Category Pool state (for local addition if not passed)
   const [localCategories, setLocalCategories] = useState<string[]>([]);
   const [bulkCategoryInput, setBulkCategoryInput] = useState('');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
 
-  // New list form state
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [newCatInput, setNewCatInput] = useState('');
 
-  // Editing list details & categories
   const [editingList, setEditingList] = useState<ProductList | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [editNewCatInput, setEditNewCatInput] = useState('');
 
-  // Quick add category inline to an existing list
   const [quickCatListId, setQuickCatListId] = useState<string | null>(null);
   const [quickCatInput, setQuickCatInput] = useState('');
 
-  // Quick link dropdown modal/popover state
   const [linkingCatName, setLinkingCatName] = useState<string | null>(null);
-
-  // Delete confirmation modal state
   const [listToDelete, setListToDelete] = useState<ProductList | null>(null);
-
-  // Success toast/feedback
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const showSuccess = (msg: string) => {
@@ -85,7 +69,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     setTimeout(() => setSuccessMessage(null), 2500);
   };
 
-  // Combine all categories across all sources with zero duplicates
   const allCombinedCategories = useMemo(() => {
     const set = new Set<string>();
     externalCategories.forEach((c) => { if (c && c.trim()) set.add(c.trim()); });
@@ -101,14 +84,12 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     return Array.from(set);
   }, [externalCategories, localCategories, products, lists]);
 
-  // Filtered categories for searching in the master pool
   const filteredMasterCategories = useMemo(() => {
     if (!categorySearchQuery.trim()) return allCombinedCategories;
     const q = categorySearchQuery.toLowerCase().trim();
     return allCombinedCategories.filter((c) => c.toLowerCase().includes(q));
   }, [allCombinedCategories, categorySearchQuery]);
 
-  // Helper to count products in a given category
   const getCategoryProductCount = (catName: string) => {
     const normalized = catName.trim().toLowerCase();
     return products.filter((p) => {
@@ -118,7 +99,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     }).length;
   };
 
-  // Helper to get lists that contain a category
   const getListsWithCategory = (catName: string) => {
     const normalized = catName.trim().toLowerCase();
     return lists.filter((l) =>
@@ -126,7 +106,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     );
   };
 
-  // Helper to get all products in a list (via its categories + direct productIds)
   const getProductsInList = (list: ProductList) => {
     const listCats = (list.categories || []).map((c) => c.trim().toLowerCase());
     return products.filter((p) => {
@@ -138,7 +117,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     });
   };
 
-  // Add multiple categories at once into Master Pool (Unlimited)
   const handleAddBulkCategories = (e?: React.FormEvent) => {
     e?.preventDefault();
     const parsed = parseCategoriesInput(bulkCategoryInput);
@@ -154,13 +132,11 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     setBulkCategoryInput('');
   };
 
-  // Delete a category from Master Pool
   const handleDeleteCategory = (cat: string) => {
     if (onDeleteCategory) {
       onDeleteCategory(cat);
     } else {
       setLocalCategories((prev) => prev.filter((c) => c !== cat));
-      // Remove from lists
       lists.forEach((l) => {
         if (l.categories?.includes(cat)) {
           onUpdateList({
@@ -173,7 +149,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     showSuccess(`تم حذف قسم "${cat}"`);
   };
 
-  // Toggle linking a category to a specific list
   const handleToggleCategoryInList = (list: ProductList, catName: string) => {
     const currentCats = list.categories || [];
     const isIncluded = currentCats.includes(catName);
@@ -192,12 +167,10 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     );
   };
 
-  // Handle creating a new list with categories
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
 
-    // Also include any categories typed in the inline field
     const extraCats = parseCategoriesInput(newCatInput);
     const finalCategories = Array.from(new Set([...selectedCategories, ...extraCats]));
 
@@ -223,7 +196,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     setIsCreating(false);
   };
 
-  // Handle adding bulk categories into the list creation form
   const handleAddBulkToCreation = () => {
     const parsed = parseCategoriesInput(newCatInput);
     if (parsed.length === 0) return;
@@ -240,7 +212,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     );
   };
 
-  // Start editing a list
   const handleStartEdit = (list: ProductList) => {
     setEditingList(list);
     setEditName(list.name);
@@ -249,7 +220,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     setEditNewCatInput('');
   };
 
-  // Save edited list
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingList || !editName.trim()) return;
@@ -288,7 +258,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     );
   };
 
-  // Quick remove category from list card directly
   const handleRemoveCategoryFromList = (list: ProductList, categoryToRemove: string) => {
     const updatedCats = (list.categories || []).filter((c) => c !== categoryToRemove);
     onUpdateList({
@@ -298,7 +267,6 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     showSuccess(`تم حذف قسم "${categoryToRemove}" من قائمة "${list.name}"`);
   };
 
-  // Quick add multiple categories inline to an existing list
   const handleQuickAddCategory = (list: ProductList) => {
     const parsed = parseCategoriesInput(quickCatInput);
     if (parsed.length === 0) return;
@@ -323,16 +291,16 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
     <div className="space-y-6 text-right">
       
       {/* Top Banner explaining the 2-Tier Unlimited Structure */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#121217] p-5 sm:p-6 rounded-2xl border border-neutral-800">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-[#D4AF37]/35 shadow-xs">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-[#D4AF37]">
-            <Layers className="w-4 h-4" />
+          <div className="flex items-center gap-2 text-xs font-bold text-[#8B6914]">
+            <Layers className="w-4 h-4 text-[#B8860B]" />
             <span>نظام الأقسام والقوائم غير المحدودة</span>
           </div>
-          <h3 className="text-lg font-bold text-white mt-1">
+          <h3 className="text-lg font-bold text-neutral-900 mt-1">
             إدارة الأقسام والقوائم وتوزيعها بكل حرية
           </h3>
-          <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+          <p className="text-xs text-neutral-600 mt-1 max-w-xl leading-relaxed">
             يمكنك إنشاء **عدد غير محدود من الأقسام** دفعة واحدة (مفصولة بفواصل)، وإنشاء **عدد غير محدود من القوائم** وربطها معاً لتظهر لزبائنك بأعلى درجات الترتيب.
           </p>
         </div>
@@ -348,26 +316,26 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
       </div>
 
       {successMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-200 flex items-center gap-2 shadow-lg animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2 shadow-sm animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
 
       {/* ================= SECTION 1: MASTER UNLIMITED CATEGORIES HUB ================= */}
-      <div className="bg-[#14141C] border border-[#D4AF37]/35 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+      <div className="bg-white border border-[#D4AF37]/40 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#D4AF37]/20 pb-3">
           <div>
-            <div className="flex items-center gap-2 text-white font-bold text-sm">
-              <Tag className="w-4 h-4 text-[#D4AF37]" />
+            <div className="flex items-center gap-2 text-neutral-900 font-bold text-sm">
+              <Tag className="w-4 h-4 text-[#B8860B]" />
               <span>بنك الأقسام والتصنيفات الشامل (غير محدود)</span>
             </div>
-            <p className="text-[11px] text-neutral-400 mt-0.5">
-              أضف أقسام متجرك هنا (اكتب عدة أقسام مفصولة بفارزة مثل: ساعات، عطور، أحذية، ملابس) وستتاح فوراً في كافة القوائم وإضافة المنتجات.
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              أضف أقسام متجرك هنا (اكتب عدة أقسام مفصولة بفارزة مثل: ساعات، عطور، نظارات، حقائب) وستتاح فوراً في كافة القوائم وإضافة المنتجات.
             </p>
           </div>
 
-          <span className="text-xs font-mono font-bold text-[#F3E5AB] bg-[#1E1E2A] px-3 py-1 rounded-lg border border-[#D4AF37]/30 shrink-0 self-start sm:self-auto">
+          <span className="text-xs font-mono font-bold text-[#7A5912] bg-[#FAF4E1] px-3 py-1 rounded-lg border border-[#D4AF37]/40 shrink-0 self-start sm:self-auto">
             {allCombinedCategories.length} قسم متوفر
           </span>
         </div>
@@ -377,16 +345,16 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="اكتب أسماء الأقسام مفصولة بفارزة (مثال: ساعات، عطور، ملابس رجالية، ملابس نسائية، أحذية، نظارات، حقائب، إكسسوارات)..."
+              placeholder="اكتب أسماء الأقسام مفصولة بفارزة (مثال: ساعات، عطور، حقائب، نظارات، إكسسوارات)..."
               value={bulkCategoryInput}
               onChange={(e) => setBulkCategoryInput(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#181822] border border-neutral-700 focus:border-[#D4AF37] rounded-xl text-white text-xs outline-none"
+              className="w-full px-3.5 py-2.5 bg-[#FAF8F2] border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-xl text-neutral-900 text-xs outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={!bulkCategoryInput.trim()}
-            className="px-5 py-2.5 bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-xs rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="px-5 py-2.5 gold-gradient-bg text-black font-bold text-xs rounded-xl transition-all shadow-sm shrink-0 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
             <span>+ إضافة الأقسام فوراً</span>
@@ -401,7 +369,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               placeholder="ابحث في الأقسام المضافة..."
               value={categorySearchQuery}
               onChange={(e) => setCategorySearchQuery(e.target.value)}
-              className="w-full pr-8 pl-3 py-1.5 bg-[#181822] border border-neutral-800 focus:border-[#D4AF37] rounded-lg text-white text-xs outline-none"
+              className="w-full pr-8 pl-3 py-1.5 bg-[#FAF8F2] border border-[#D4AF37]/30 focus:border-[#D4AF37] rounded-lg text-neutral-900 text-xs outline-none"
             />
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute right-2.5 top-3 pointer-events-none" />
           </div>
@@ -409,7 +377,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
 
         {/* Master Categories Grid / Chips */}
         {allCombinedCategories.length === 0 ? (
-          <div className="p-4 bg-[#181824] rounded-xl text-center text-xs text-neutral-400">
+          <div className="p-4 bg-[#FAF8F2] rounded-xl text-center text-xs text-neutral-500 border border-[#D4AF37]/20">
             لم تقم بإضافة أقسام بعد. اكتب أول أقسام لمتجرك في الصندوق أعلاه واضغط على "إضافة الأقسام فوراً".
           </div>
         ) : (
@@ -422,16 +390,15 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               return (
                 <div
                   key={cat}
-                  className="group relative flex items-center gap-2 px-3 py-1.5 bg-[#181824] hover:bg-[#1E1E2C] border border-neutral-700 hover:border-[#D4AF37] rounded-xl text-xs font-semibold text-white transition-all shadow-sm"
+                  className="group relative flex items-center gap-2 px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#FAF4E1] border border-[#D4AF37]/35 hover:border-[#D4AF37] rounded-xl text-xs font-semibold text-neutral-900 transition-all shadow-xs"
                 >
-                  <span className="text-[#F3E5AB] font-bold">{cat}</span>
-                  <span className="text-[10px] text-neutral-400 font-mono">({prodCount} منتج)</span>
+                  <span className="text-[#7A5912] font-bold">{cat}</span>
+                  <span className="text-[10px] text-neutral-500 font-mono">({prodCount} منتج)</span>
 
-                  {/* Which lists this category is linked to */}
                   {linkedLists.length > 0 ? (
                     <span 
                       onClick={() => setLinkingCatName(isLinkingThis ? null : cat)}
-                      className="text-[9px] bg-[#2A261A] text-[#F3E5AB] px-1.5 py-0.5 rounded border border-[#D4AF37]/40 cursor-pointer"
+                      className="text-[9px] bg-white text-[#7A5912] px-1.5 py-0.5 rounded border border-[#D4AF37]/40 cursor-pointer font-bold"
                       title={linkedLists.map((l) => l.name).join('، ')}
                     >
                       {linkedLists.length} قوائم
@@ -440,35 +407,33 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                     <button
                       type="button"
                       onClick={() => setLinkingCatName(isLinkingThis ? null : cat)}
-                      className="text-[9px] bg-neutral-800 hover:bg-[#D4AF37] hover:text-black text-neutral-300 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                      className="text-[9px] bg-white hover:bg-[#D4AF37] hover:text-black text-neutral-700 border border-[#D4AF37]/30 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
                       title="ربط هذا القسم بقائمة"
                     >
                       + ربط بقائمة
                     </button>
                   )}
 
-                  {/* Delete category button */}
                   <button
                     type="button"
                     onClick={() => handleDeleteCategory(cat)}
-                    className="text-neutral-500 hover:text-red-400 transition-colors p-0.5 cursor-pointer"
+                    className="text-neutral-400 hover:text-red-600 transition-colors p-0.5 cursor-pointer"
                     title={`حذف قسم ${cat}`}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Quick Dropdown to link/unlink to lists */}
                   {isLinkingThis && (
-                    <div className="absolute top-full right-0 mt-1 z-30 w-52 bg-[#121218] border border-[#D4AF37] rounded-xl p-2 shadow-2xl space-y-1 animate-fade-in text-right">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-[#F3E5AB] pb-1 border-b border-neutral-800">
+                    <div className="absolute top-full right-0 mt-1 z-30 w-52 bg-white border border-[#D4AF37] rounded-xl p-2 shadow-xl space-y-1 animate-fade-in text-right">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-[#7A5912] pb-1 border-b border-[#D4AF37]/20">
                         <span>ربط قسم: {cat}</span>
-                        <button onClick={() => setLinkingCatName(null)} className="text-neutral-400 hover:text-white">
+                        <button onClick={() => setLinkingCatName(null)} className="text-neutral-400 hover:text-neutral-900">
                           <X className="w-3 h-3" />
                         </button>
                       </div>
 
                       {lists.length === 0 ? (
-                        <p className="text-[10px] text-neutral-400 p-1">لا توجد قوائم منشأة بعد.</p>
+                        <p className="text-[10px] text-neutral-500 p-1">لا توجد قوائم منشأة بعد.</p>
                       ) : (
                         <div className="max-h-36 overflow-y-auto space-y-1">
                           {lists.map((list) => {
@@ -480,8 +445,8 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                                 onClick={() => handleToggleCategoryInList(list, cat)}
                                 className={`w-full text-right px-2 py-1 rounded text-[11px] font-semibold flex items-center justify-between transition-colors cursor-pointer ${
                                   isLinked
-                                    ? 'bg-[#2A261A] text-[#F3E5AB]'
-                                    : 'hover:bg-neutral-800 text-neutral-300'
+                                    ? 'bg-[#FAF4E1] text-[#7A5912]'
+                                    : 'hover:bg-[#FAF8F2] text-neutral-700'
                                 }`}
                               >
                                 <span className="truncate">{list.name}</span>
@@ -502,13 +467,13 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
 
       {/* ================= CREATE NEW LIST FORM ================= */}
       {isCreating && (
-        <div className="bg-[#15151E] border-2 border-[#D4AF37]/50 rounded-2xl p-5 sm:p-7 space-y-5 animate-fade-in">
-          <div className="border-b border-neutral-800 pb-3">
-            <h4 className="text-base font-bold text-white flex items-center gap-2">
-              <FolderPlus className="w-4 h-4 text-[#D4AF37]" />
+        <div className="bg-white border-2 border-[#D4AF37]/60 rounded-2xl p-5 sm:p-7 space-y-5 animate-fade-in shadow-md">
+          <div className="border-b border-[#D4AF37]/20 pb-3">
+            <h4 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+              <FolderPlus className="w-4 h-4 text-[#B8860B]" />
               <span>إنشاء قائمة جديدة وربط الأقسام بها (غير محدود)</span>
             </h4>
-            <span className="text-xs text-neutral-400">
+            <span className="text-xs text-neutral-500">
               حدد اسم القائمة واختر الأقسام التي تتبع لها أو اكتب أقساماً جديدة لإضافتها فوراً.
             </span>
           </div>
@@ -516,8 +481,8 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
           <form onSubmit={handleCreateList} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1.5">
-                  اسم القائمة (مثال: أزياء وموضة، عطور وساعات، هدايا فاخرة) <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-semibold mb-1.5">
+                  اسم القائمة (مثال: عطور وساعات، هدايا فاخرة) <span className="text-[#B8860B]">*</span>
                 </label>
                 <input
                   type="text"
@@ -525,12 +490,12 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   placeholder="اكتب اسم القائمة..."
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#1C1C26] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none"
+                  className="w-full px-3.5 py-2.5 bg-[#FAF8F2] border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1.5">
+                <label className="block text-neutral-700 font-semibold mb-1.5">
                   وصف مختصر للقائمة (اختياري)
                 </label>
                 <input
@@ -538,24 +503,22 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   placeholder="مثال: تشكيلة فاخرة مختارة بعناية..."
                   value={newListDesc}
                   onChange={(e) => setNewListDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#1C1C26] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none"
+                  className="w-full px-3.5 py-2.5 bg-[#FAF8F2] border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none"
                 />
               </div>
             </div>
 
-            {/* Link Categories to this List */}
-            <div className="bg-[#121218] p-4 rounded-xl border border-neutral-800 space-y-3">
+            <div className="bg-[#FAF8F2] p-4 rounded-xl border border-[#D4AF37]/30 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-neutral-200 font-bold flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span className="text-neutral-900 font-bold flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-[#B8860B]" />
                   <span>الأقسام المندرجة تحت هذه القائمة ({selectedCategories.length} محددة):</span>
                 </span>
-                <span className="text-[11px] text-neutral-400">
+                <span className="text-[11px] text-neutral-500">
                   انقر على القسم لإضافته للقائمة
                 </span>
               </div>
 
-              {/* Existing Categories Selection */}
               {allCombinedCategories.length > 0 ? (
                 <div className="flex flex-wrap gap-2 pt-1 max-h-48 overflow-y-auto">
                   {allCombinedCategories.map((cat) => {
@@ -568,12 +531,12 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                         onClick={() => toggleCategoryInCreation(cat)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
                           isSelected
-                            ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37] shadow-sm'
-                            : 'bg-[#181822] text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-700'
+                            ? 'bg-[#FAF4E1] text-[#7A5912] border-[#D4AF37] shadow-xs'
+                            : 'bg-white text-neutral-600 border-[#D4AF37]/25 hover:text-neutral-900 hover:border-[#D4AF37]/60'
                         }`}
                       >
                         <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] ${
-                          isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'border border-neutral-600'
+                          isSelected ? 'bg-[#D4AF37] text-black font-bold' : 'border border-neutral-400'
                         }`}>
                           {isSelected ? '✓' : '+'}
                         </span>
@@ -589,11 +552,10 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                 </p>
               )}
 
-              {/* Add Multiple Custom Categories on the fly */}
-              <div className="pt-2 border-t border-neutral-800 flex gap-2">
+              <div className="pt-2 border-t border-[#D4AF37]/20 flex gap-2">
                 <input
                   type="text"
-                  placeholder="كتابة أقسام جديدة (يمكنك كتابة عدة أقسام مفصولة بفارزة مثل: ساعات، نظارات، أحذية)..."
+                  placeholder="كتابة أقسام جديدة (يمكنك كتابة عدة أقسام مفصولة بفارزة)..."
                   value={newCatInput}
                   onChange={(e) => setNewCatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -602,13 +564,13 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                       handleAddBulkToCreation();
                     }
                   }}
-                  className="flex-1 px-3 py-2 bg-[#181822] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white text-xs outline-none"
+                  className="flex-1 px-3 py-2 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 text-xs outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleAddBulkToCreation}
                   disabled={!newCatInput.trim()}
-                  className="px-4 py-2 bg-[#252538] hover:bg-[#2F2F45] text-[#F3E5AB] text-xs font-bold rounded-lg border border-neutral-700 transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                  className="px-4 py-2 bg-[#FAF4E1] hover:bg-[#F3E5AB] text-[#7A5912] text-xs font-bold rounded-lg border border-[#D4AF37]/50 transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>إضافة</span>
@@ -620,7 +582,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCreating(false)}
-                className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white"
+                className="px-4 py-2.5 rounded-xl text-neutral-600 hover:text-neutral-900"
               >
                 إلغاء
               </button>
@@ -638,12 +600,12 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
 
       {/* ================= LISTS DISPLAY ================= */}
       {lists.length === 0 ? (
-        <div className="py-16 text-center space-y-3 bg-[#111116] rounded-2xl border border-neutral-800">
-          <div className="w-12 h-12 rounded-full bg-[#181822] border border-[#D4AF37]/40 flex items-center justify-center mx-auto text-[#D4AF37]">
+        <div className="py-16 text-center space-y-3 bg-white rounded-2xl border border-[#D4AF37]/30 shadow-xs">
+          <div className="w-12 h-12 rounded-full bg-[#FAF7EF] border border-[#D4AF37]/40 flex items-center justify-center mx-auto text-[#B8860B]">
             <Layers className="w-6 h-6" />
           </div>
-          <h4 className="text-base font-bold text-white">لا توجد قوائم مخصصة حالياً</h4>
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+          <h4 className="text-base font-bold text-neutral-900">لا توجد قوائم مخصصة حالياً</h4>
+          <p className="text-xs text-neutral-500 max-w-sm mx-auto leading-relaxed">
             انقر على زر "إنشاء قائمة جديدة" لإنشاء قائمتك الأولى وربط الأقسام بها لتبدو واجهة المتجر مرتبة واحترافية.
           </p>
         </div>
@@ -657,19 +619,18 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
             return (
               <div
                 key={list.id}
-                className="bg-[#121218] border border-neutral-800 hover:border-[#D4AF37]/50 rounded-2xl p-5 space-y-4 transition-all shadow-sm"
+                className="bg-white border border-[#D4AF37]/35 hover:border-[#D4AF37] rounded-2xl p-5 space-y-4 transition-all shadow-xs"
               >
-                {/* List Header */}
-                <div className="flex items-start justify-between gap-3 border-b border-neutral-800/80 pb-3">
+                <div className="flex items-start justify-between gap-3 border-b border-[#D4AF37]/20 pb-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="text-base font-bold text-white">{list.name}</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2A261A] text-[#F3E5AB] border border-[#D4AF37]/40">
+                      <h4 className="text-base font-bold text-neutral-900">{list.name}</h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF4E1] text-[#7A5912] border border-[#D4AF37]/40">
                         {listCats.length} أقسام • {listProducts.length} منتجات
                       </span>
                     </div>
                     {list.description && (
-                      <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                      <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
                         {list.description}
                       </p>
                     )}
@@ -679,7 +640,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                     <button
                       type="button"
                       onClick={() => handleStartEdit(list)}
-                      className="p-1.5 bg-[#181822] hover:bg-[#222230] text-neutral-300 hover:text-[#D4AF37] border border-neutral-800 rounded-lg transition-colors cursor-pointer"
+                      className="p-1.5 bg-[#FAF8F2] hover:bg-[#FAF4E1] text-neutral-700 hover:text-[#8B6914] border border-[#D4AF37]/30 rounded-lg transition-colors cursor-pointer"
                       title="تعديل اسم ووصف وأقسام القائمة"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -688,7 +649,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                     <button
                       type="button"
                       onClick={() => setListToDelete(list)}
-                      className="p-1.5 bg-[#181822] hover:bg-[#281818] text-neutral-400 hover:text-red-400 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
+                      className="p-1.5 bg-[#FAF8F2] hover:bg-red-50 text-neutral-500 hover:text-red-600 border border-[#D4AF37]/30 rounded-lg transition-colors cursor-pointer"
                       title="حذف هذه القائمة"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -696,11 +657,10 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   </div>
                 </div>
 
-                {/* Categories inside this List */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400 font-medium flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span className="text-neutral-600 font-semibold flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-[#B8860B]" />
                       <span>الأقسام المندرجة بالقائمة:</span>
                     </span>
 
@@ -710,16 +670,15 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                         setQuickCatListId(isAddingQuickCat ? null : list.id);
                         setQuickCatInput('');
                       }}
-                      className="text-xs font-semibold text-[#D4AF37] hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-xs font-bold text-[#8B6914] hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>{isAddingQuickCat ? 'إغلاق' : 'إضافة أقسام'}</span>
                     </button>
                   </div>
 
-                  {/* Inline quick add category form (supports comma-separated multiple categories) */}
                   {isAddingQuickCat && (
-                    <div className="p-2.5 bg-[#171722] rounded-xl border border-[#D4AF37]/40 flex gap-2 animate-fade-in">
+                    <div className="p-2.5 bg-[#FAF8F2] rounded-xl border border-[#D4AF37]/45 flex gap-2 animate-fade-in">
                       <input
                         type="text"
                         autoFocus
@@ -732,22 +691,21 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                             handleQuickAddCategory(list);
                           }
                         }}
-                        className="flex-1 px-2.5 py-1.5 bg-[#12121A] border border-neutral-700 rounded-lg text-white text-xs outline-none"
+                        className="flex-1 px-2.5 py-1.5 bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 text-xs outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => handleQuickAddCategory(list)}
                         disabled={!quickCatInput.trim()}
-                        className="px-3 py-1.5 bg-[#D4AF37] hover:bg-[#E5C158] text-black text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        className="px-3 py-1.5 gold-gradient-bg text-black text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         إضافة
                       </button>
                     </div>
                   )}
 
-                  {/* Categories Pills */}
                   {listCats.length === 0 ? (
-                    <div className="p-3 bg-[#161620] rounded-xl text-center text-neutral-400 text-xs">
+                    <div className="p-3 bg-[#FAF8F2] rounded-xl text-center text-neutral-500 text-xs border border-[#D4AF37]/20">
                       لم يتم ربط أي أقسام بهذه القائمة بعد. انقر على "إضافة أقسام" لربط أول قسم.
                     </div>
                   ) : (
@@ -757,14 +715,14 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                         return (
                           <div
                             key={cat}
-                            className="group flex items-center gap-1.5 px-2.5 py-1 bg-[#1C1C26] border border-[#D4AF37]/35 rounded-lg text-xs font-semibold text-[#F3E5AB]"
+                            className="group flex items-center gap-1.5 px-2.5 py-1 bg-[#FAF7EF] border border-[#D4AF37]/40 rounded-lg text-xs font-bold text-[#7A5912]"
                           >
                             <span>{cat}</span>
-                            <span className="text-[10px] text-neutral-400 font-mono">({count})</span>
+                            <span className="text-[10px] text-neutral-500 font-mono">({count})</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveCategoryFromList(list, cat)}
-                              className="text-neutral-500 hover:text-red-400 transition-colors p-0.5 cursor-pointer"
+                              className="text-neutral-400 hover:text-red-600 transition-colors p-0.5 cursor-pointer"
                               title={`إزالة قسم ${cat} من هذه القائمة`}
                             >
                               <X className="w-3 h-3" />
@@ -776,17 +734,16 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   )}
                 </div>
 
-                {/* Thumbnails of products inside this list */}
                 {listProducts.length > 0 && (
-                  <div className="pt-2 border-t border-neutral-800/60 space-y-1.5">
-                    <span className="text-[11px] text-neutral-400 block">
+                  <div className="pt-2 border-t border-[#D4AF37]/20 space-y-1.5">
+                    <span className="text-[11px] text-neutral-500 block">
                       عينة من المنتجات المعروضة تلقائياً في هذه القائمة:
                     </span>
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
                       {listProducts.slice(0, 8).map((p) => (
                         <div
                           key={p.id}
-                          className="relative w-11 h-11 rounded-lg overflow-hidden border border-neutral-700 bg-black shrink-0 p-0.5"
+                          className="relative w-11 h-11 rounded-lg overflow-hidden border border-[#D4AF37]/30 bg-[#FAF8F2] shrink-0 p-0.5"
                           title={`${p.name} - قسم: ${p.categoryLabel}`}
                         >
                           <img
@@ -797,7 +754,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                         </div>
                       ))}
                       {listProducts.length > 8 && (
-                        <div className="w-11 h-11 rounded-lg bg-[#1C1C28] border border-neutral-700 flex items-center justify-center text-[11px] font-bold text-[#F3E5AB] shrink-0 font-mono">
+                        <div className="w-11 h-11 rounded-lg bg-[#FAF4E1] border border-[#D4AF37]/40 flex items-center justify-center text-[11px] font-bold text-[#7A5912] shrink-0 font-mono">
                           +{listProducts.length - 8}
                         </div>
                       )}
@@ -805,15 +762,15 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   </div>
                 )}
 
-                <div className="pt-2 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-400">
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                <div className="pt-2 border-t border-[#D4AF37]/20 flex items-center justify-between text-[11px] text-neutral-500">
+                  <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>تظهر في متجر الزبائن مباشرة</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => handleStartEdit(list)}
-                    className="px-3 py-1 bg-[#1A1A26] hover:bg-[#252535] text-white rounded-lg border border-neutral-700 font-medium transition-colors cursor-pointer"
+                    className="px-3 py-1 bg-[#FAF7EF] hover:bg-[#FAF4E1] text-[#7A5912] rounded-lg border border-[#D4AF37]/35 font-bold transition-colors cursor-pointer"
                   >
                     تعديل الأقسام ({listCats.length})
                   </button>
@@ -825,47 +782,46 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
       )}
 
       {/* ================= EDIT LIST MODAL ================= */}
-      {editingList && (
+      {editingList && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setEditingList(null)}
         >
           <div 
-            className="w-full max-w-lg bg-[#121218] border border-[#D4AF37]/50 rounded-2xl p-6 space-y-4 text-right shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-lg bg-white border border-[#D4AF37]/50 rounded-2xl p-6 space-y-4 text-right shadow-2xl max-h-[88vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
-              <h4 className="text-base font-bold text-white">تعديل اسم وأقسام القائمة</h4>
-              <button onClick={() => setEditingList(null)} className="text-neutral-400 hover:text-white cursor-pointer">
+            <div className="flex justify-between items-center border-b border-[#D4AF37]/20 pb-3 sticky top-0 bg-white z-10">
+              <h4 className="text-base font-bold text-neutral-900">تعديل اسم وأقسام القائمة</h4>
+              <button onClick={() => setEditingList(null)} className="text-neutral-400 hover:text-neutral-900 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1.5">اسم القائمة</label>
+                <label className="block text-neutral-700 font-semibold mb-1.5">اسم القائمة</label>
                 <input
                   type="text"
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#1C1C26] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none"
+                  className="w-full px-3.5 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1.5">الوصف (اختياري)</label>
+                <label className="block text-neutral-700 font-semibold mb-1.5">الوصف (اختياري)</label>
                 <textarea
                   rows={2}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-[#1C1C26] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none resize-none"
+                  className="w-full px-3.5 py-2 bg-neutral-50 border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none resize-none"
                 />
               </div>
 
-              {/* Manage categories in edit modal */}
-              <div className="bg-[#171722] p-3.5 rounded-xl border border-neutral-800 space-y-2.5">
-                <label className="block text-neutral-300 font-bold">
+              <div className="bg-neutral-50 p-3.5 rounded-xl border border-[#D4AF37]/30 space-y-2.5">
+                <label className="block text-neutral-900 font-bold">
                   الأقسام التابعة لهذه القائمة ({editCategories.length} محددة):
                 </label>
 
@@ -880,8 +836,8 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                           onClick={() => toggleCategoryInEdit(cat)}
                           className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
                             isIncluded
-                              ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37]'
-                              : 'bg-[#14141C] text-neutral-400 border-neutral-700 hover:text-white'
+                              ? 'gold-gradient-bg text-black border-[#D4AF37] font-bold'
+                              : 'bg-white text-neutral-600 border-[#D4AF37]/25 hover:text-neutral-900'
                           }`}
                         >
                           <span>{isIncluded ? '✓' : '+'}</span>
@@ -892,7 +848,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-2 border-t border-neutral-800">
+                <div className="flex gap-2 pt-2 border-t border-[#D4AF37]/20">
                   <input
                     type="text"
                     placeholder="إضافة أقسام جديدة (مفصولة بفارزة)..."
@@ -904,24 +860,24 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
                         handleAddBulkToEdit();
                       }
                     }}
-                    className="flex-1 px-3 py-1.5 bg-[#12121A] border border-neutral-700 rounded-lg text-white text-xs outline-none"
+                    className="flex-1 px-3 py-1.5 bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 text-xs outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleAddBulkToEdit}
                     disabled={!editNewCatInput.trim()}
-                    className="px-3 py-1.5 bg-[#252538] hover:bg-[#2F2F45] text-[#F3E5AB] text-xs font-bold rounded-lg border border-neutral-700 disabled:opacity-50 cursor-pointer"
+                    className="px-3 py-1.5 gold-gradient-bg text-black text-xs font-bold rounded-lg border border-[#D4AF37]/40 disabled:opacity-50 cursor-pointer"
                   >
                     + إضافة
                   </button>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setEditingList(null)}
-                  className="px-4 py-2 text-neutral-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2 text-neutral-600 hover:text-neutral-900 cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -934,29 +890,30 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= DELETE LIST CONFIRMATION MODAL ================= */}
-      {listToDelete && (
+      {listToDelete && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setListToDelete(null)}
         >
           <div 
-            className="w-full max-w-sm bg-[#14141C] border border-red-500/50 rounded-2xl p-6 space-y-4 text-right shadow-2xl"
+            className="w-full max-w-sm bg-white border border-red-400 rounded-2xl p-6 space-y-4 text-right shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 rounded-xl bg-red-950/60 border border-red-800 flex items-center justify-center text-red-400 mx-auto">
+            <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-1">
-              <h4 className="text-base font-bold text-white">تأكيد حذف القائمة</h4>
-              <p className="text-xs text-neutral-300">
-                هل أنت متأكد من حذف قائمة <strong className="text-[#F3E5AB]">"{listToDelete.name}"</strong>؟
+              <h4 className="text-base font-bold text-neutral-900">تأكيد حذف القائمة</h4>
+              <p className="text-xs text-neutral-600">
+                هل أنت متأكد من حذف قائمة <strong className="text-[#7A5912]">"{listToDelete.name}"</strong>؟
               </p>
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-[11px] text-neutral-500">
                 لن يتم حذف المنتجات أو الأقسام؛ فقط سيتم إزالة تصنيف هذه القائمة من المتجر.
               </p>
             </div>
@@ -965,7 +922,7 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               <button
                 type="button"
                 onClick={() => setListToDelete(null)}
-                className="py-2.5 px-4 text-xs font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-xl transition-colors cursor-pointer"
+                className="py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer"
               >
                 تراجع وإلغاء
               </button>
@@ -983,7 +940,8 @@ export const ProductListsManager: React.FC<ProductListsManagerProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

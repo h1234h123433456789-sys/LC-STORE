@@ -9,6 +9,12 @@ export interface ProductList {
   createdAt: string;
 }
 
+export interface ProductVariantOption {
+  name: string;
+  stockCount: number;
+  image?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -34,13 +40,42 @@ export interface Product {
   reviewsCount: number;
   isFeatured?: boolean;
   isFeaturedInStrip?: boolean;
-  sizes?: string[]; // Optional available sizes (e.g. S, M, L, XL or 40, 41, 42)
+  sizes?: string[]; // Optional legacy sizes
+  customOptions?: string[]; // Optional custom options/variants defined by admin (e.g. colors, models, types)
+  customOptionLabel?: string; // Optional label for the custom options (e.g. 'اللون / النوع المطلوب')
+  variantOptions?: ProductVariantOption[]; // Per-option stock count and linked image
+}
+
+export function getProductVariants(product?: Product | null): ProductVariantOption[] {
+  if (!product) return [];
+  if (Array.isArray(product.variantOptions) && product.variantOptions.length > 0) {
+    return product.variantOptions
+      .filter((v) => v && typeof v.name === 'string' && v.name.trim().length > 0)
+      .map((v) => ({
+        name: v.name.trim(),
+        stockCount: typeof v.stockCount === 'number' ? Math.max(0, Math.floor(v.stockCount)) : 10,
+        ...(v.image && typeof v.image === 'string' && v.image.trim() ? { image: v.image.trim() } : {})
+      }));
+  }
+  if (Array.isArray(product.customOptions) && product.customOptions.length > 0) {
+    const fallbackStock = typeof product.stockCount === 'number' ? Math.max(0, Math.floor(product.stockCount)) : 10;
+    return product.customOptions
+      .filter((opt) => typeof opt === 'string' && opt.trim().length > 0)
+      .map((opt) => ({
+        name: opt.trim(),
+        stockCount: fallbackStock
+      }));
+  }
+  return [];
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
-  selectedSize?: string; // Optional chosen size
+  selectedSize?: string; // Optional legacy chosen size
+  selectedOption?: string; // Chosen custom option/variant by the customer
+  selectedOptionLabel?: string; // Label of the custom option group
+  selectedOptionImage?: string; // Image linked to the chosen custom option/variant
 }
 
 export interface User {
@@ -79,6 +114,7 @@ export interface Order {
   status: 'pending' | 'approved' | 'rejected' | 'delivered';
   adminNotes?: string;
   isFreeShipping?: boolean;
+  stockDeducted?: boolean;
 }
 
 export interface FreeShippingConfig {

@@ -14,9 +14,9 @@ async function generateAllIcons() {
   }
   const base64Font = fs.readFileSync(fontPath).toString('base64');
 
-  // Generator function creating the full-bleed luxury badge icon
+  // Generator function creating the full-bleed white luxury badge icon
   function buildSvg({ isMaskable = false }) {
-    // Standard icon fills almost the entire canvas (444x444 squircle)
+    // Standard icon fills almost the entire canvas (446x446 squircle)
     // Maskable icon fits safely inside Android's adaptive crop zone (350x350 squircle)
     const cardSize = isMaskable ? 350 : 446;
     const cardRadius = isMaskable ? 80 : 100;
@@ -53,77 +53,58 @@ async function generateAllIcons() {
         text-anchor: middle;
         dominant-baseline: central;
         letter-spacing: 4px;
-        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 35px rgba(212, 175, 55, 0.45));
+        filter: drop-shadow(0 6px 14px rgba(180, 135, 28, 0.25));
       }
       .brand-sub {
         font-family: 'CinzelLuxury', Georgia, serif;
         font-size: ${subSize}px;
         font-weight: 700;
-        fill: #F3E5AB;
+        fill: #8B6914;
         text-anchor: middle;
-        letter-spacing: 10px;
+        letter-spacing: 9px;
         opacity: 0.95;
-        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9));
       }
     </style>
 
-    <!-- Multi-Tone Royal Gold Emboss Gradient -->
+    <!-- High-Contrast 24K Royal Gold Gradient on White -->
     <linearGradient id="goldEmbossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="18%" stop-color="#FFF5D6" />
-      <stop offset="40%" stop-color="#F5DE88" />
-      <stop offset="68%" stop-color="#D4AF37" />
-      <stop offset="88%" stop-color="#B88A22" />
+      <stop offset="0%" stop-color="#8A6415" />
+      <stop offset="25%" stop-color="#C59B27" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="75%" stop-color="#B8860B" />
       <stop offset="100%" stop-color="#7A560B" />
     </linearGradient>
 
     <!-- Metallic Gold Border Gradient -->
     <linearGradient id="goldBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFDF0" stop-opacity="0.95" />
-      <stop offset="35%" stop-color="#F3E5AB" stop-opacity="0.9" />
-      <stop offset="70%" stop-color="#D4AF37" stop-opacity="0.8" />
-      <stop offset="100%" stop-color="#9E781A" stop-opacity="0.65" />
+      <stop offset="0%" stop-color="#C59B27" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#9E781A" stop-opacity="0.85" />
     </linearGradient>
 
-    <!-- Deep Midnight Titanium Card Texture Gradient -->
-    <linearGradient id="titaniumCard" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1C1C26" />
-      <stop offset="50%" stop-color="#14141B" />
-      <stop offset="100%" stop-color="#0B0B0E" />
+    <!-- Pure White Card Surface -->
+    <linearGradient id="whiteCard" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#FFFFFF" />
     </linearGradient>
-
-    <!-- Canvas Full-Bleed Background Gradient -->
-    <radialGradient id="canvasBg" cx="50%" cy="50%" r="75%">
-      <stop offset="0%" stop-color="#14141C" />
-      <stop offset="60%" stop-color="#0D0D12" />
-      <stop offset="100%" stop-color="#060608" />
-    </radialGradient>
-
-    <!-- Ambient Gold Core Light in Center -->
-    <radialGradient id="centerAura" cx="50%" cy="50%" r="55%">
-      <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.28" />
-      <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.08" />
-      <stop offset="100%" stop-color="#0B0B0E" stop-opacity="0" />
-    </radialGradient>
 
     <!-- Star Glow Gradient -->
     <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="50%" stop-color="#FFF3C4" />
-      <stop offset="100%" stop-color="#D4AF37" />
+      <stop offset="0%" stop-color="#E5C158" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#9E781A" />
     </linearGradient>
 
     <!-- Card Drop Shadow Filter -->
     <filter id="cardShadow" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.85" />
-      <feDropShadow dx="0" dy="0" stdDeviation="15" flood-color="#D4AF37" flood-opacity="0.2" />
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#B8860B" flood-opacity="0.18" />
     </filter>
   </defs>
 
-  <!-- Full Canvas Background (Seamless Luxury Midnight) -->
-  <rect width="512" height="512" fill="url(#canvasBg)" />
+  <!-- Full Canvas Background (Pure White #FFFFFF) -->
+  <rect width="512" height="512" fill="#FFFFFF" />
 
-  <!-- The Luxury Squircle Card (Centered, Large & Prominent - No small box!) -->
+  <!-- The White Luxury Squircle Card with Gold Border -->
   <g filter="url(#cardShadow)">
     <rect 
       x="${cardX}" 
@@ -132,51 +113,45 @@ async function generateAllIcons() {
       height="${cardSize}" 
       rx="${cardRadius}" 
       ry="${cardRadius}" 
-      fill="url(#titaniumCard)" 
+      fill="url(#whiteCard)" 
       stroke="url(#goldBorderGrad)" 
-      stroke-width="${isMaskable ? 5 : 6}" 
+      stroke-width="${isMaskable ? 6 : 7}" 
     />
   </g>
 
   <!-- Inner Subtle Hairline Gold Border -->
   <rect 
-    x="${cardX + (isMaskable ? 8 : 10)}" 
-    y="${cardY + (isMaskable ? 8 : 10)}" 
-    width="${cardSize - (isMaskable ? 16 : 20)}" 
-    height="${cardSize - (isMaskable ? 16 : 20)}" 
-    rx="${cardRadius - (isMaskable ? 6 : 8)}" 
-    ry="${cardRadius - (isMaskable ? 6 : 8)}" 
+    x="${cardX + (isMaskable ? 10 : 12)}" 
+    y="${cardY + (isMaskable ? 10 : 12)}" 
+    width="${cardSize - (isMaskable ? 20 : 24)}" 
+    height="${cardSize - (isMaskable ? 20 : 24)}" 
+    rx="${cardRadius - (isMaskable ? 8 : 10)}" 
+    ry="${cardRadius - (isMaskable ? 8 : 10)}" 
     fill="none" 
-    stroke="#F3E5AB" 
-    stroke-width="1.2" 
-    opacity="0.3" 
+    stroke="#D4AF37" 
+    stroke-width="1.5" 
+    opacity="0.4" 
   />
 
-  <!-- Subtle Ambient Radial Gold Glow behind typography -->
-  <circle cx="256" cy="256" r="${isMaskable ? 140 : 180}" fill="url(#centerAura)" />
-
   <!-- Corner Gold Diamond Micro-Accents inside card -->
-  <g opacity="0.4" fill="#D4AF37">
-    <circle cx="${cardX + (isMaskable ? 26 : 32)}" cy="${cardY + (isMaskable ? 26 : 32)}" r="2.5" />
-    <circle cx="${cardX + cardSize - (isMaskable ? 26 : 32)}" cy="${cardY + (isMaskable ? 26 : 32)}" r="2.5" />
-    <circle cx="${cardX + (isMaskable ? 26 : 32)}" cy="${cardY + cardSize - (isMaskable ? 26 : 32)}" r="2.5" />
-    <circle cx="${cardX + cardSize - (isMaskable ? 26 : 32)}" cy="${cardY + cardSize - (isMaskable ? 26 : 32)}" r="2.5" />
+  <g opacity="0.65" fill="#C59B27">
+    <circle cx="${cardX + (isMaskable ? 26 : 32)}" cy="${cardY + (isMaskable ? 26 : 32)}" r="3" />
+    <circle cx="${cardX + cardSize - (isMaskable ? 26 : 32)}" cy="${cardY + (isMaskable ? 26 : 32)}" r="3" />
+    <circle cx="${cardX + (isMaskable ? 26 : 32)}" cy="${cardY + cardSize - (isMaskable ? 26 : 32)}" r="3" />
+    <circle cx="${cardX + cardSize - (isMaskable ? 26 : 32)}" cy="${cardY + cardSize - (isMaskable ? 26 : 32)}" r="3" />
   </g>
 
-  <!-- Main Monogram: "LC" in Pristine Official Cinzel Luxury Typography -->
+  <!-- Main Monogram: "LC" in Pristine Official Cinzel Gold Typography -->
   <text x="256" y="${textY}" class="brand-title">LC</text>
 
-  <!-- Luxury Subtitle: "BOUTIQUE" or "STORE" centered under LC -->
-  <text x="261" y="${subY}" class="brand-sub">LUXURY STORE</text>
+  <!-- Subtitle: "OFFICIAL STORE" centered under LC -->
+  <text x="261" y="${subY}" class="brand-sub">LC STORE</text>
 
   <!-- Iconic 4-Point Golden Star Sparkle Badge Accent -->
   <g transform="translate(${starX}, ${starY}) scale(${starScale})">
-    <!-- Star Halo -->
-    <circle cx="0" cy="0" r="18" fill="#D4AF37" opacity="0.4" />
-    <!-- 4-Point Diamond Sparkle Star -->
+    <circle cx="0" cy="0" r="16" fill="#D4AF37" opacity="0.18" />
     <path d="M 0 -22 C 2 -6 6 -2 22 0 C 6 2 2 6 0 22 C -2 6 -6 2 -22 0 C -6 -2 -2 -6 0 -22 Z" fill="url(#starGrad)" />
-    <!-- Bright Diamond Center Core -->
-    <circle cx="0" cy="0" r="3.5" fill="#FFFFFF" />
+    <circle cx="0" cy="0" r="3" fill="#FFFFFF" />
   </g>
 </svg>`;
   }

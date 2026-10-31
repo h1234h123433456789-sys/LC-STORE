@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Package, 
   ShoppingBag, 
@@ -49,7 +50,7 @@ import {
   MessageCircle,
   Truck
 } from 'lucide-react';
-import { Product, Order, ProductList, AdminStaffMember, FreeShippingConfig } from '../types';
+import { Product, Order, ProductList, AdminStaffMember, FreeShippingConfig, ProductVariantOption, getProductVariants } from '../types';
 import { formatPrice, formatDateTime, toIQD } from '../utils/formatters';
 import { compressImageFile } from '../utils/imageCompressor';
 import { ProductListsManager } from './ProductListsManager';
@@ -331,10 +332,123 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [isAddingQuickList, setIsAddingQuickList] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
-  // Product Sizes State (Multi-size support: S, M, L, XL, 38, 40...)
-  const [newSizes, setNewSizes] = useState<string[]>([]);
-  const [newSizeInput, setNewSizeInput] = useState('');
-  const [editSizeInput, setEditSizeInput] = useState('');
+  // Product Inventory / Stock Count State
+  const [newStockCount, setNewStockCount] = useState<number>(10);
+
+  // Custom Product Options / Variants State (e.g., Colors, Models, Types with per-option stock & image)
+  const [newCustomOptionLabel, setNewCustomOptionLabel] = useState<string>('اللون / النوع المطلوب');
+  const [newVariantOptions, setNewVariantOptions] = useState<ProductVariantOption[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState<string>('');
+  const [newOptionStockInput, setNewOptionStockInput] = useState<number>(10);
+  const [editOptionInput, setEditOptionInput] = useState<string>('');
+  const [editOptionStockInput, setEditOptionStockInput] = useState<number>(10);
+
+  const handleAddNewOptionItems = (rawInput: string) => {
+    const parts = rawInput
+      .split(/[,،\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const defaultStock = Math.max(0, Math.floor(Number(newOptionStockInput) || 0));
+    setNewVariantOptions((prev) => {
+      const next = [...prev];
+      parts.forEach((p) => {
+        if (!next.some((item) => item.name === p)) {
+          next.push({
+            name: p,
+            stockCount: defaultStock,
+            image: newImages[0] || undefined
+          });
+        }
+      });
+      return next;
+    });
+    setNewOptionInput('');
+  };
+
+  const handleUploadNewVariantImage = async (optName: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressing(true);
+    try {
+      const compressed = await compressImageFile(file);
+      setNewImages((prev) => (prev.includes(compressed) ? prev : [...prev, compressed]));
+      setNewVariantOptions((prev) =>
+        prev.map((v) => (v.name === optName ? { ...v, image: compressed } : v))
+      );
+    } catch {
+      setImageError('تعذر معالجة صورة الخيار، يرجى المحاولة بصورة أخرى.');
+    } finally {
+      setIsCompressing(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAddEditOptionItems = (rawInput: string) => {
+    if (!editingProduct) return;
+    const parts = rawInput
+      .split(/[,،\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const defaultStock = Math.max(0, Math.floor(Number(editOptionStockInput) || 0));
+    const currentVariants = getProductVariants(editingProduct);
+    const nextVariants = [...currentVariants];
+    const currentImages =
+      editingProduct.images && editingProduct.images.length > 0
+        ? editingProduct.images
+        : [editingProduct.image].filter(Boolean);
+
+    parts.forEach((p) => {
+      if (!nextVariants.some((v) => v.name === p)) {
+        nextVariants.push({
+          name: p,
+          stockCount: defaultStock,
+          image: currentImages[0] || undefined
+        });
+      }
+    });
+    const totalVariantStock = nextVariants.reduce((sum, v) => sum + Math.max(0, v.stockCount), 0);
+    setEditingProduct({
+      ...editingProduct,
+      variantOptions: nextVariants,
+      customOptions: nextVariants.map((v) => v.name),
+      customOptionLabel: editingProduct.customOptionLabel?.trim() || 'اللون / النوع المطلوب',
+      stockCount: totalVariantStock,
+      inStock: totalVariantStock > 0
+    });
+    setEditOptionInput('');
+  };
+
+  const handleUploadEditVariantImage = async (optName: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingProduct) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsEditCompressing(true);
+    try {
+      const compressed = await compressImageFile(file);
+      const existingImgs =
+        editingProduct.images && editingProduct.images.length > 0
+          ? editingProduct.images
+          : [editingProduct.image].filter(Boolean);
+      const updatedImgs = existingImgs.includes(compressed) ? existingImgs : [...existingImgs, compressed];
+      const currentVariants = getProductVariants(editingProduct).map((v) =>
+        v.name === optName ? { ...v, image: compressed } : v
+      );
+      setEditingProduct({
+        ...editingProduct,
+        image: updatedImgs[0] || editingProduct.image,
+        images: updatedImgs,
+        variantOptions: currentVariants,
+        customOptions: currentVariants.map((v) => v.name)
+      });
+    } catch {
+      alert('تعذر رفع صورة الخيار');
+    } finally {
+      setIsEditCompressing(false);
+      e.target.value = '';
+    }
+  };
 
   const handleCreateQuickList = () => {
     const trimmed = quickListNameInput.trim();
@@ -757,30 +871,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setNewImages((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
-  // Add Size handlers for Add Product form
-  const handleAddNewSize = (sizeToAdd?: string) => {
-    const val = (sizeToAdd !== undefined ? sizeToAdd : newSizeInput).trim();
-    if (!val) return;
-    if (!newSizes.includes(val)) {
-      setNewSizes((prev) => [...prev, val]);
-    }
-    if (sizeToAdd === undefined) {
-      setNewSizeInput('');
-    }
-  };
-
-  const handleRemoveNewSize = (sizeToRemove: string) => {
-    setNewSizes((prev) => prev.filter((s) => s !== sizeToRemove));
-  };
-
-  const handleToggleNewSizePreset = (sizePreset: string) => {
-    if (newSizes.includes(sizePreset)) {
-      setNewSizes((prev) => prev.filter((s) => s !== sizePreset));
-    } else {
-      setNewSizes((prev) => [...prev, sizePreset]);
-    }
-  };
-
   const handleSendOrderWhatsApp = (ord: Order) => {
     const phone = ord.customer?.phone || '';
     let cleanPhone = phone.replace(/\D/g, '');
@@ -791,10 +881,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
 
     const itemsSummary = (ord.items || [])
-      .map(
-        (it) =>
-          `• ${it.product?.name || 'منتج'}${it.selectedSize ? ` (القياس: ${it.selectedSize})` : ''} × ${it.quantity} — ${formatPrice((it.product?.priceUSD || 0) * (it.quantity || 1), ord.currency)}`
-      )
+      .map((it) => {
+        const optText = it.selectedOption
+          ? ` (${it.selectedOptionLabel || it.product?.customOptionLabel || 'الخانة'}: ${it.selectedOption})`
+          : '';
+        return `• ${it.product?.name || 'منتج'}${optText} × ${it.quantity} — ${formatPrice((it.product?.priceUSD || 0) * (it.quantity || 1), ord.currency)}`;
+      })
       .join('\n');
 
     const subtotalNum = (ord.items || []).reduce((sum, it) => {
@@ -821,56 +913,48 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     window.open(waUrl, '_blank');
   };
 
-  // Edit Size handlers for Edit Product Modal
-  const handleAddEditSize = (sizeToAdd?: string) => {
-    if (!editingProduct) return;
-    const val = (sizeToAdd !== undefined ? sizeToAdd : editSizeInput).trim();
-    if (!val) return;
-    const currentSizes = editingProduct.sizes || [];
-    if (!currentSizes.includes(val)) {
-      setEditingProduct({
-        ...editingProduct,
-        sizes: [...currentSizes, val]
-      });
-    }
-    if (sizeToAdd === undefined) {
-      setEditSizeInput('');
-    }
-  };
-
-  const handleRemoveEditSize = (sizeToRemove: string) => {
-    if (!editingProduct) return;
-    const currentSizes = editingProduct.sizes || [];
-    setEditingProduct({
-      ...editingProduct,
-      sizes: currentSizes.filter((s) => s !== sizeToRemove)
-    });
-  };
-
-  const handleToggleEditSizePreset = (sizePreset: string) => {
-    if (!editingProduct) return;
-    const currentSizes = editingProduct.sizes || [];
-    if (currentSizes.includes(sizePreset)) {
-      setEditingProduct({
-        ...editingProduct,
-        sizes: currentSizes.filter((s) => s !== sizePreset)
-      });
-    } else {
-      setEditingProduct({
-        ...editingProduct,
-        sizes: [...currentSizes, sizePreset]
-      });
-    }
-  };
-
   // Add Product Submit
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
-    const primaryImage = newImages[0] || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop';
     const categoryText = newCategory.trim() || 'معروضات عامة';
     const finalPriceIQD = Math.max(250, Number(newPriceIQD) || 25000);
+
+    // Include any pending text typed in newOptionInput if admin didn't press '+'
+    const pendingParts = newOptionInput
+      .split(/[,،\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const defaultOptStock = Math.max(0, Math.floor(Number(newOptionStockInput) || 0));
+    const mergedVariants: ProductVariantOption[] = [...newVariantOptions];
+    pendingParts.forEach((part) => {
+      if (!mergedVariants.some((v) => v.name === part)) {
+        mergedVariants.push({
+          name: part,
+          stockCount: defaultOptStock,
+          image: newImages[0] || undefined
+        });
+      }
+    });
+
+    // Ensure all variant images are included in the product gallery
+    const galleryImages = [...newImages];
+    mergedVariants.forEach((v) => {
+      if (v.image && !galleryImages.includes(v.image)) {
+        galleryImages.push(v.image);
+      }
+    });
+
+    const primaryImage =
+      galleryImages[0] ||
+      mergedVariants.find((v) => v.image)?.image ||
+      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop';
+
+    const effectiveStockCount =
+      mergedVariants.length > 0
+        ? mergedVariants.reduce((sum, v) => sum + Math.max(0, Math.floor(Number(v.stockCount) || 0)), 0)
+        : Math.max(0, Math.floor(Number(newStockCount) || 0));
 
     const prod: Product = {
       id: `lc-prod-${Date.now()}`,
@@ -880,20 +964,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       priceUSD: finalPriceIQD,
       priceIQD: finalPriceIQD,
       image: primaryImage,
-      images: newImages.length > 0 ? newImages : [primaryImage],
+      images: galleryImages.length > 0 ? galleryImages : [primaryImage],
       shortDesc: newDesc.trim() || newName.trim(),
       description: newDesc.trim() || 'منتج أصلي معروض في متجر LC متاح للتسليم الفوري مع الدفع كاش عند الاستلام.',
       specs: {
         material: 'خامات أصلية فاخرة',
         warranty: 'جديد أصلي 100% بتغليف المصنع'
       },
-      inStock: true,
-      stockCount: 999,
+      variantOptions: mergedVariants.map((v) => ({
+        name: v.name,
+        stockCount: Math.max(0, Math.floor(Number(v.stockCount) || 0)),
+        ...(v.image ? { image: v.image } : {})
+      })),
+      customOptions: mergedVariants.map((v) => v.name),
+      customOptionLabel: mergedVariants.length > 0 ? (newCustomOptionLabel.trim() || 'اللون / النوع المطلوب') : '',
+      inStock: effectiveStockCount > 0,
+      stockCount: effectiveStockCount,
       rating: 5.0,
       reviewsCount: 1,
       isFeatured: true,
-      isFeaturedInStrip: newIsFeaturedInStrip,
-      sizes: newSizes.length > 0 ? newSizes : undefined
+      isFeaturedInStrip: newIsFeaturedInStrip
     };
 
     onAddProduct(prod, selectedListIdsForNewProd);
@@ -907,12 +997,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setNewName('');
     setNewCategory('');
     setNewPriceIQD(25000);
+    setNewStockCount(10);
+    setNewCustomOptionLabel('اللون / النوع المطلوب');
+    setNewVariantOptions([]);
+    setNewOptionInput('');
+    setNewOptionStockInput(10);
     setNewDesc('');
     setNewIsFeaturedInStrip(false);
     setNewImages([]);
     setImageUrlInput('');
-    setNewSizes([]);
-    setNewSizeInput('');
     setSelectedListIdsForNewProd([]);
     setActiveTab('products');
   };
@@ -921,20 +1014,57 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const handleSaveEditProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
-    const currentImages = editingProduct.images && editingProduct.images.length > 0
-      ? editingProduct.images
-      : [editingProduct.image];
+    const baseImages = editingProduct.images && editingProduct.images.length > 0
+      ? [...editingProduct.images]
+      : [editingProduct.image].filter(Boolean);
 
-    const finalSizes = editingProduct.sizes && editingProduct.sizes.length > 0
-      ? editingProduct.sizes
-      : undefined;
-
-    onUpdateProduct({
-      ...editingProduct,
-      image: currentImages[0] || editingProduct.image,
-      images: currentImages,
-      sizes: finalSizes
+    const pendingEditParts = editOptionInput
+      .split(/[,،\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const defaultEditOptStock = Math.max(0, Math.floor(Number(editOptionStockInput) || 0));
+    const currentVariants = [...getProductVariants(editingProduct)];
+    pendingEditParts.forEach((part) => {
+      if (!currentVariants.some((v) => v.name === part)) {
+        currentVariants.push({
+          name: part,
+          stockCount: defaultEditOptStock,
+          image: baseImages[0] || undefined
+        });
+      }
     });
+
+    currentVariants.forEach((v) => {
+      if (v.image && !baseImages.includes(v.image)) {
+        baseImages.push(v.image);
+      }
+    });
+
+    const effectiveEditStock =
+      currentVariants.length > 0
+        ? currentVariants.reduce((sum, v) => sum + Math.max(0, Math.floor(Number(v.stockCount) || 0)), 0)
+        : Math.max(0, Math.floor(Number(editingProduct.stockCount !== undefined ? editingProduct.stockCount : 10)));
+
+    const updatedProd: Product = {
+      ...editingProduct,
+      image: baseImages[0] || editingProduct.image,
+      images: baseImages,
+      variantOptions: currentVariants.map((v) => ({
+        name: v.name,
+        stockCount: Math.max(0, Math.floor(Number(v.stockCount) || 0)),
+        ...(v.image ? { image: v.image } : {})
+      })),
+      customOptions: currentVariants.map((v) => v.name),
+      customOptionLabel: currentVariants.length > 0
+        ? (editingProduct.customOptionLabel?.trim() || 'اللون / النوع المطلوب')
+        : '',
+      stockCount: effectiveEditStock,
+      inStock: effectiveEditStock > 0
+    };
+    delete updatedProd.sizes;
+
+    onUpdateProduct(updatedProd);
+    setEditOptionInput('');
     setEditingProduct(null);
   };
 
@@ -1153,39 +1283,39 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // If not logged in, render the login screen with Name + PIN & persistent session
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#070709] text-white flex flex-col items-center justify-center p-4 selection:bg-[#D4AF37]/30 selection:text-[#F3E5AB]">
-        <div className="w-full max-w-md bg-[#111116] border border-[#D4AF37]/40 rounded-3xl shadow-2xl p-6 sm:p-8 text-center space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-[#181822] border-2 border-[#D4AF37] flex items-center justify-center mx-auto text-[#D4AF37] shadow-[0_0_30px_rgba(212,175,55,0.25)]">
+      <div className="min-h-screen bg-[#FAF8F2] text-[#1A1814] flex flex-col items-center justify-center p-4 selection:bg-[#D4AF37]/30 selection:text-[#1A1814]">
+        <div className="w-full max-w-md bg-white border border-[#D4AF37]/45 rounded-3xl shadow-[0_20px_50px_rgba(212,175,55,0.18)] p-6 sm:p-8 text-center space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-[#FAF7EF] border-2 border-[#D4AF37] flex items-center justify-center mx-auto text-[#B38728] shadow-[0_0_30px_rgba(212,175,55,0.25)]">
             <Lock className="w-8 h-8" />
           </div>
 
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1A1A26] border border-[#D4AF37]/40 text-[#D4AF37] text-[11px] font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#8B6914] text-[11px] font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
               <span>نظام إدارة متجر LC المعتمد</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white">تسجيل دخول فريق الإدارة</h2>
-            <p className="text-xs text-neutral-400 leading-relaxed max-w-sm mx-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-neutral-900">تسجيل دخول فريق الإدارة</h2>
+            <p className="text-xs text-neutral-600 leading-relaxed max-w-sm mx-auto">
               أدخل اسمك المسجل كمدير أو موظف والرمز السري للوصول للوحة التحكم وإدارة المنتجات والطلبات.
             </p>
           </div>
 
           {lockoutStatus.isLocked ? (
-            <div className="p-4 rounded-xl bg-red-950/80 border border-red-700 text-xs text-red-200 text-right space-y-2">
-              <div className="flex items-center gap-2 font-bold text-red-300">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            <div className="p-4 rounded-xl bg-red-50 border border-red-300 text-xs text-red-900 text-right space-y-2">
+              <div className="flex items-center gap-2 font-bold text-red-700">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                 <span>تم إغلاق لوحة التحكم أمنياً!</span>
               </div>
-              <p className="text-[11px] text-neutral-300">
+              <p className="text-[11px] text-red-800">
                 تم رصد عدة محاولات خاطئة متتالية. لحماية المتجر وقاعدة البيانات، تم حظر الدخول مؤقتاً.
               </p>
-              <div className="bg-black/60 p-2 rounded-lg text-center font-mono font-bold text-[#F3E5AB]">
+              <div className="bg-white p-2 rounded-lg text-center font-mono font-bold text-[#7A5912] border border-red-200">
                 الوقت المتبقي لفتح القفل: {lockoutStatus.remainingMinutes} دقيقة ({lockoutStatus.remainingSeconds} ثانية)
               </div>
             </div>
           ) : (
             pinError && (
-              <div className="p-3 rounded-xl bg-red-950/70 border border-red-800 text-xs text-red-200 text-right animate-ios-slide-up">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-700 font-bold text-right animate-ios-slide-up">
                 {pinError}
               </div>
             )
@@ -1194,11 +1324,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <form onSubmit={handleLoginSubmit} className="space-y-4 text-right">
             {/* Staff Name Input */}
             <div>
-              <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                اسم المدير أو الموظف المسجل <span className="text-[#D4AF37]">*</span>
+              <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                اسم المدير أو الموظف المسجل <span className="text-[#B38728]">*</span>
               </label>
               <div className="relative">
-                <Users className="w-4 h-4 text-neutral-500 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                <Users className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
@@ -1207,23 +1337,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="مثال: المدير العام أو اسمك"
                   value={adminNameInput}
                   onChange={(e) => setAdminNameInput(e.target.value)}
-                  className="w-full pr-10 pl-3.5 py-3 bg-[#171720] border border-neutral-700 focus:border-[#D4AF37] rounded-xl text-white text-xs outline-none transition-colors"
+                  className="w-full pr-10 pl-3.5 py-3 bg-[#FAF8F2] border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-xl text-neutral-900 text-xs outline-none transition-colors"
                 />
               </div>
             </div>
 
             {/* PIN Input */}
             <div>
-              <div className="flex items-center justify-between mb-1.5 text-xs text-neutral-400">
+              <div className="flex items-center justify-between mb-1.5 text-xs text-neutral-500">
                 <span className="text-[10px] text-neutral-500 font-mono">
-                  المحاولات المتبقية: <strong className="text-[#D4AF37]">{lockoutStatus.attemptsLeft}</strong>
+                  المحاولات المتبقية: <strong className="text-[#8B6914]">{lockoutStatus.attemptsLeft}</strong>
                 </span>
-                <label className="font-semibold text-neutral-300">
-                  الرمز السري الخاص بك <span className="text-[#D4AF37]">*</span>
+                <label className="font-semibold text-neutral-700">
+                  الرمز السري الخاص بك <span className="text-[#B38728]">*</span>
                 </label>
               </div>
               <div className="relative">
-                <Key className="w-4 h-4 text-neutral-500 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                <Key className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showLoginPin ? 'text' : 'password'}
                   required
@@ -1231,20 +1361,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="••••••••"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  className="w-full pr-10 pl-10 py-3 bg-[#171720] border border-neutral-700 focus:border-[#D4AF37] rounded-xl text-white text-xs outline-none font-mono transition-colors text-right"
+                  className="w-full pr-10 pl-10 py-3 bg-[#FAF8F2] border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-xl text-neutral-900 text-xs outline-none font-mono transition-colors text-right"
                 />
                 <button
                   type="button"
                   onClick={() => setShowLoginPin(!showLoginPin)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-1"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-900 p-1"
                 >
                   {showLoginPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-[#14141E] border border-neutral-800 text-[11px] text-neutral-400 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="p-2.5 rounded-xl bg-[#FAF6EA] border border-[#D4AF37]/30 text-[11px] text-neutral-600 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>يتم حفظ الجلسة على هذا الجهاز تلقائياً ولن يُطلب منك الرمز مجدداً إلا عند تسجيل الخروج.</span>
             </div>
 
@@ -1258,10 +1388,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </button>
           </form>
 
-          <div className="pt-2 border-t border-neutral-800">
+          <div className="pt-2 border-t border-[#D4AF37]/20">
             <button
               onClick={onExitAdmin}
-              className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+              className="text-xs text-neutral-600 hover:text-neutral-900 transition-colors flex items-center justify-center gap-1.5 mx-auto cursor-pointer font-semibold"
             >
               <ArrowRight className="w-3.5 h-3.5" />
               <span>العودة لمتجر الزبائن المباشر</span>
@@ -1273,17 +1403,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-[#EDEDED] flex flex-col font-sans animate-fade-in">
+    <div className="min-h-screen bg-white text-[#1A1814] flex flex-col font-sans">
       
       {/* Top Admin Header */}
-      <header className="sticky top-0 z-40 bg-[#0B0B0E]/95 border-b border-[#D4AF37]/25 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white/95 border-b border-[#D4AF37]/35 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
             <span className="text-2xl font-brand font-extrabold gold-gradient-text">LC</span>
-            <div className="h-4 w-[1px] bg-neutral-700 hidden sm:block" />
+            <div className="h-4 w-[1px] bg-[#D4AF37]/30 hidden sm:block" />
             <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs font-bold text-white">لوحة التحكم الكاملة</span>
-              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#181824] border border-[#D4AF37]/50 text-[#F3E5AB] font-bold flex items-center gap-1">
+              <span className="text-xs font-bold text-neutral-900">لوحة التحكم الكاملة</span>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#7A5912] font-bold flex items-center gap-1">
                 <span>👤</span>
                 <span>{currentStaffSession?.name || 'المدير العام'}</span>
               </span>
@@ -1293,10 +1423,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             type="button"
             onClick={handleManualRefresh}
             disabled={isManualRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#14141E] hover:bg-[#1C1C2A] border border-[#D4AF37]/40 hover:border-[#D4AF37] text-[#F3E5AB] rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF7EF] hover:bg-[#F3ECD8] border border-[#D4AF37]/45 hover:border-[#D4AF37] text-[#7A5912] rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
             title="تحديث البيانات والطلبات"
           >
-            <RotateCcw className={`w-3.5 h-3.5 text-[#D4AF37] ${isManualRefreshing ? 'animate-spin' : ''}`} />
+            <RotateCcw className={`w-3.5 h-3.5 text-[#B38728] ${isManualRefreshing ? 'animate-spin' : ''}`} />
             <span>{isManualRefreshing ? 'جاري التحديث...' : 'تحديث الطلبات'}</span>
           </button>
         </div>
@@ -1305,27 +1435,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <button
             type="button"
             onClick={() => setIsNotificationModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#F3E5AB] bg-[#161620] border border-[#D4AF37]/40 hover:border-[#D4AF37] rounded-lg transition-all cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#7A5912] bg-[#FAF7EF] border border-[#D4AF37]/45 hover:border-[#D4AF37] rounded-lg transition-all cursor-pointer active:scale-95"
             title="إعدادات وتنبيهات إشعارات الطلبات"
           >
-            <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <Bell className="w-3.5 h-3.5 text-[#B38728]" />
             <span className="hidden sm:inline">إشعارات الطلبات</span>
           </button>
 
           <button
             type="button"
             onClick={onExitAdmin}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#F3E5AB] bg-[#161620] border border-[#D4AF37]/40 hover:border-[#D4AF37] rounded-lg transition-all cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#7A5912] bg-[#FAF7EF] border border-[#D4AF37]/45 hover:border-[#D4AF37] rounded-lg transition-all cursor-pointer active:scale-95"
             title="معاينة المتجر كما يراه الزبون"
           >
-            <Eye className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <Eye className="w-3.5 h-3.5 text-[#B38728]" />
             <span className="hidden sm:inline">معاينة متجر الزبائن</span>
           </button>
 
           <button
             type="button"
             onClick={handleLogoutAdmin}
-            className="px-3 py-1.5 text-xs text-neutral-400 hover:text-red-400 transition-colors cursor-pointer active:scale-95"
+            className="px-3 py-1.5 text-xs text-neutral-500 hover:text-red-600 font-semibold transition-colors cursor-pointer active:scale-95"
           >
             قفل اللوحة
           </button>
@@ -1337,62 +1467,62 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         
         {/* KPI Stats Bar */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-[#111116] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+          <div className="bg-white border border-[#D4AF37]/30 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[11px] text-neutral-400 block mb-1">طلبات بانتظار موافقتك</span>
-              <span className="text-2xl font-bold text-amber-400 font-mono">{pendingOrders.length}</span>
+              <span className="text-[11px] text-neutral-500 font-semibold block mb-1">طلبات بانتظار موافقتك</span>
+              <span className="text-2xl font-bold text-amber-600 font-mono">{pendingOrders.length}</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-950/40 border border-amber-800/40 flex items-center justify-center text-amber-400">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-300 flex items-center justify-center text-amber-600">
               <Clock className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[#111116] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+          <div className="bg-white border border-[#D4AF37]/30 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[11px] text-neutral-400 block mb-1">طلبات تمت الموافقة عليها</span>
-              <span className="text-2xl font-bold text-emerald-400 font-mono">{approvedOrders.length}</span>
+              <span className="text-[11px] text-neutral-500 font-semibold block mb-1">طلبات تمت الموافقة عليها</span>
+              <span className="text-2xl font-bold text-emerald-600 font-mono">{approvedOrders.length}</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-center text-emerald-600">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[#111116] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+          <div className="bg-white border border-[#D4AF37]/30 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[11px] text-neutral-400 block mb-1">كاش مطلوب استلامه من الزبائن</span>
-              <span className="text-base sm:text-lg font-bold text-[#F3E5AB] font-mono tabular-nums">
+              <span className="text-[11px] text-neutral-500 font-semibold block mb-1">كاش مطلوب استلامه من الزبائن</span>
+              <span className="text-base sm:text-lg font-bold text-[#7A5912] font-mono tabular-nums">
                 {formatPrice(pendingCashUSD, 'IQD')}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-[#2A2518] border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37]">
+            <div className="w-10 h-10 rounded-lg bg-[#FAF6EA] border border-[#D4AF37]/40 flex items-center justify-center text-[#B38728]">
               <Banknote className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[#111116] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+          <div className="bg-white border border-[#D4AF37]/30 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[11px] text-neutral-400 block mb-1">المنتجات المعروضة بالمتجر</span>
-              <span className="text-2xl font-bold text-white font-mono">{products.length}</span>
+              <span className="text-[11px] text-neutral-500 font-semibold block mb-1">المنتجات المعروضة بالمتجر</span>
+              <span className="text-2xl font-bold text-neutral-900 font-mono">{products.length}</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-[#181822] border border-neutral-700 flex items-center justify-center text-neutral-300">
+            <div className="w-10 h-10 rounded-lg bg-[#FAF7EF] border border-[#D4AF37]/35 flex items-center justify-center text-[#7A5912]">
               <Package className="w-5 h-5" />
             </div>
           </div>
         </div>
 
         {/* Tab Switcher Bar - Fully Scrollable and accessible on ALL screens */}
-        <div className="border-b border-neutral-800 pb-3">
-          <div className="flex items-center gap-2 p-1.5 bg-[#121217] rounded-xl border border-neutral-800 overflow-x-auto scrollbar-thin">
+        <div className="border-b border-[#D4AF37]/25 pb-3">
+          <div className="flex items-center gap-2 p-1.5 bg-white rounded-xl border border-[#D4AF37]/30 overflow-x-auto scrollbar-thin shadow-sm">
             <button
               type="button"
               onClick={() => setActiveTab('orders')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'orders'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <ShoppingBag className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <ShoppingBag className={`w-3.5 h-3.5 ${activeTab === 'orders' ? 'text-black' : 'text-[#B38728]'}`} />
               <span>إدارة طلبات الزبائن</span>
               {pendingOrders.length > 0 && (
                 <span className="px-1.5 py-0.2 bg-amber-500 text-black text-[10px] font-bold rounded-full">
@@ -1407,13 +1537,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('delivered')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'delivered'
-                  ? 'bg-[#182618] text-[#A7F3D0] border border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-                  : 'text-neutral-400 hover:text-emerald-400'
+                  ? 'bg-emerald-600 text-white border border-emerald-700 shadow-sm'
+                  : 'text-neutral-600 hover:text-emerald-700 hover:bg-emerald-50'
               }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <CheckCircle2 className={`w-3.5 h-3.5 ${activeTab === 'delivered' ? 'text-white' : 'text-emerald-600'}`} />
               <span>الطلبات المستلمة والأرباح</span>
-              <span className="px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-mono font-bold rounded-full">
+              <span className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-full ${
+                activeTab === 'delivered'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}>
                 {deliveredOrdersList.length} طلب ({formatPrice(totalDeliveredProfitIQD, 'IQD')})
               </span>
             </button>
@@ -1423,12 +1557,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('products')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'products'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <Package className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>معروضات المتجر ({products.length})</span>
+              <Package className={`w-3.5 h-3.5 ${activeTab === 'products' ? 'text-black' : 'text-[#B38728]'}`} />
+              <span>معروضات ومخزون المتجر ({products.length})</span>
             </button>
 
             <button
@@ -1436,11 +1570,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('add')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'add'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <Plus className={`w-3.5 h-3.5 ${activeTab === 'add' ? 'text-black' : 'text-[#B38728]'}`} />
               <span>إضافة منتج جديد</span>
             </button>
 
@@ -1449,11 +1583,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('lists')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'lists'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <Layers className={`w-3.5 h-3.5 ${activeTab === 'lists' ? 'text-black' : 'text-[#B38728]'}`} />
               <span>قوائم ومجموعات المنتجات ({productLists.length})</span>
             </button>
 
@@ -1462,11 +1596,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('accounts')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'accounts'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/50 shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <Users className={`w-3.5 h-3.5 ${activeTab === 'accounts' ? 'text-black' : 'text-[#B38728]'}`} />
               <span>حسابات الزبائن والمحظورين ({registeredUsers.length})</span>
               {blockedUsersList.length > 0 && (
                 <span className="px-1.5 py-0.2 bg-red-600 text-white text-[10px] font-bold rounded-full">
@@ -1480,11 +1614,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               onClick={() => setActiveTab('staff')}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'staff'
-                  ? 'bg-[#22222C] text-[#F3E5AB] border border-[#D4AF37]/60 shadow-[0_0_15px_rgba(212,175,55,0.2)]'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-[#FAF7EF]'
               }`}
             >
-              <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <Users className={`w-3.5 h-3.5 ${activeTab === 'staff' ? 'text-black' : 'text-[#B38728]'}`} />
               <span>فريق الإدارة والموظفين ({staffMembers.length})</span>
             </button>
           </div>
@@ -1492,8 +1626,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
         {/* Global Toast Notification */}
         {toastMessage && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-black/90 border border-[#D4AF37] text-[#F3E5AB] shadow-2xl flex items-center gap-2 text-xs font-bold animate-bounce">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-white border-2 border-[#D4AF37] text-neutral-900 shadow-2xl flex items-center gap-2 text-xs font-bold animate-bounce">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>{toastMessage}</span>
           </div>
         )}
@@ -1503,26 +1637,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <div key="tab-orders" className="space-y-4 animate-mac-tab">
 
             {/* Free Shipping Threshold Control Panel (By Order Price in IQD) */}
-            <div className="bg-gradient-to-br from-[#14141D] via-[#111117] to-[#121218] border border-[#D4AF37]/45 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-neutral-800/90">
+            <div className="bg-white border border-[#D4AF37]/45 rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-[#D4AF37]/20">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.2)]">
+                  <div className="p-2.5 rounded-xl bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#B38728]">
                     <Truck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs sm:text-sm font-extrabold text-neutral-900 flex items-center gap-2 flex-wrap">
                       <span>نظام التوصيل المجاني التلقائي حسب السعر النهائي للطلب</span>
                       {freeShippingConfig?.enabled ? (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-600/60 font-bold">
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold">
                           مفعل حالياً 🟢 ({formatPrice(freeShippingConfig?.minOrderAmountIQD || 50000, 'IQD')})
                         </span>
                       ) : (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 font-bold">
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-300 font-bold">
                           متوقف 🔴
                         </span>
                       )}
                     </h4>
-                    <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+                    <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
                       حدد المبلغ (بالدينار العراقي) الذي إذا وصل إليه مجموع سلة الزبون أو تجاوزه يصبح التوصيل مجانياً تلقائياً ويظهر شريط التقدم بالسلة
                     </p>
                   </div>
@@ -1546,8 +1680,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 active:scale-95 ${
                     freeShippingConfig?.enabled
-                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600/70 hover:bg-emerald-900/80'
-                      : 'bg-[#181822] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-400 hover:bg-emerald-100'
+                      : 'bg-[#FAF7EF] text-[#7A5912] border-[#D4AF37]/40 hover:border-[#D4AF37]'
                   }`}
                 >
                   {freeShippingConfig?.enabled ? 'إيقاف العرض المؤقت' : 'تفعيل عرض التوصيل المجاني'}
@@ -1556,7 +1690,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
               {freeShippingConfig?.enabled && (
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
-                  <div className="text-xs text-neutral-300 font-semibold">
+                  <div className="text-xs text-neutral-700 font-semibold">
                     حدد السعر المطلوب (د.ع) لتفعيل التوصيل المجاني تلقائياً:
                   </div>
 
@@ -1577,8 +1711,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           }}
                           className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer active:scale-95 font-mono ${
                             isSelected
-                              ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.4)]'
-                              : 'bg-[#181822] text-neutral-300 border-neutral-700 hover:border-[#D4AF37]/60 hover:text-white'
+                              ? 'gold-gradient-bg text-black border-[#D4AF37] shadow-sm'
+                              : 'bg-[#FAF7EF] text-neutral-700 border-[#D4AF37]/30 hover:border-[#D4AF37]'
                           }`}
                         >
                           {formatPrice(amount, 'IQD')}
@@ -1587,8 +1721,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     })}
 
                     {/* Custom Price Input in IQD */}
-                    <div className="flex items-center gap-1.5 bg-[#181822] border border-[#D4AF37]/40 rounded-xl px-3 py-1.5 shadow-inner">
-                      <span className="text-[11px] text-[#F3E5AB] font-semibold">سعر مخصص:</span>
+                    <div className="flex items-center gap-1.5 bg-[#FAF7EF] border border-[#D4AF37]/40 rounded-xl px-3 py-1.5">
+                      <span className="text-[11px] text-[#7A5912] font-semibold">سعر مخصص:</span>
                       <input
                         type="number"
                         min={1000}
@@ -1603,9 +1737,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             });
                           }
                         }}
-                        className="w-24 text-center bg-black/70 border border-neutral-700 focus:border-[#D4AF37] rounded-lg py-1 px-1.5 text-xs font-mono font-bold text-[#F3E5AB] outline-none"
+                        className="w-24 text-center bg-white border border-[#D4AF37]/40 focus:border-[#D4AF37] rounded-lg py-1 px-1.5 text-xs font-mono font-bold text-neutral-900 outline-none"
                       />
-                      <span className="text-[11px] text-neutral-400 font-bold">د.ع</span>
+                      <span className="text-[11px] text-neutral-600 font-bold">د.ع</span>
                     </div>
                   </div>
                 </div>
@@ -1613,7 +1747,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
             
             {/* Redesigned Responsive Orders Filter & Search Bar */}
-            <div className="bg-[#111116] border border-neutral-800 rounded-2xl p-4 space-y-3.5">
+            <div className="bg-white border border-[#D4AF37]/30 rounded-2xl p-4 space-y-3.5 shadow-sm">
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                 {/* Search in orders */}
                 <div className="relative flex-1 max-w-md">
@@ -1622,40 +1756,40 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     placeholder="ابحث برقم الطلب #LC... أو اسم الزبون أو رقم هاتفه..."
                     value={orderSearchTerm}
                     onChange={(e) => setOrderSearchTerm(e.target.value)}
-                    className="w-full pr-9 pl-4 py-2 bg-[#171722] border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 outline-none focus:border-[#D4AF37] transition-colors"
+                    className="w-full pr-9 pl-4 py-2 bg-[#FAF8F2] border border-[#D4AF37]/35 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 outline-none focus:border-[#D4AF37] transition-colors"
                   />
-                  <Search className="w-4 h-4 text-neutral-400 absolute right-3 top-2.5 pointer-events-none" />
+                  <Search className="w-4 h-4 text-[#B38728] absolute right-3 top-2.5 pointer-events-none" />
                   {orderSearchTerm && (
                     <button
                       onClick={() => setOrderSearchTerm('')}
-                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-white"
+                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-neutral-900"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="text-xs text-neutral-400 flex items-center justify-between md:justify-end gap-3">
-                  <span>الطلبات المطابقة: <strong className="text-[#F3E5AB] font-mono text-sm">{filteredOrders.length}</strong> من <span className="font-mono">{orders.length}</span></span>
+                <div className="text-xs text-neutral-600 flex items-center justify-between md:justify-end gap-3">
+                  <span>الطلبات المطابقة: <strong className="text-[#7A5912] font-mono text-sm">{filteredOrders.length}</strong> من <span className="font-mono">{orders.length}</span></span>
                 </div>
               </div>
 
               {/* Status Filter Buttons - Wrapping & Horizontal Scroll */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-neutral-800/80">
-                <span className="text-xs font-semibold text-neutral-400 ml-2 hidden sm:inline">الحالة:</span>
+              <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-[#D4AF37]/20">
+                <span className="text-xs font-semibold text-neutral-600 ml-2 hidden sm:inline">الحالة:</span>
                 
                 <button
                   type="button"
                   onClick={() => setOrderFilter('all')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'all'
-                      ? 'bg-[#282838] text-white border border-[#D4AF37]/60 shadow-sm'
-                      : 'bg-[#15151E] text-neutral-400 hover:text-white border border-neutral-800'
+                      ? 'gold-gradient-bg text-black border border-[#D4AF37] shadow-sm'
+                      : 'bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/25'
                   }`}
                 >
-                  <ShoppingBag className="w-3 h-3 text-[#D4AF37]" />
+                  <ShoppingBag className="w-3 h-3 text-[#B38728]" />
                   <span>كافة الطلبات</span>
-                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-neutral-800 text-neutral-300 font-mono">
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-white/80 text-neutral-800 font-mono">
                     {orders.length}
                   </span>
                 </button>
@@ -1665,13 +1799,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onClick={() => setOrderFilter('pending')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'pending'
-                      ? 'bg-amber-950/80 text-amber-300 border border-amber-600 shadow-sm'
-                      : 'bg-[#15151E] text-neutral-400 hover:text-white border border-neutral-800'
+                      ? 'bg-amber-100 text-amber-900 border border-amber-400 shadow-sm'
+                      : 'bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/25'
                   }`}
                 >
-                  <Clock className="w-3 h-3 text-amber-400" />
+                  <Clock className="w-3 h-3 text-amber-600" />
                   <span>بانتظار الموافقة</span>
-                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-amber-500/20 text-amber-400 font-mono">
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-amber-200/70 text-amber-900 font-mono">
                     {pendingOrders.length}
                   </span>
                 </button>
@@ -1681,13 +1815,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onClick={() => setOrderFilter('approved')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'approved'
-                      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600 shadow-sm'
-                      : 'bg-[#15151E] text-neutral-400 hover:text-white border border-neutral-800'
+                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-sm'
+                      : 'bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/25'
                   }`}
                 >
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   <span>تمت الموافقة</span>
-                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-200/70 text-emerald-900 font-mono">
                     {approvedOrders.length}
                   </span>
                 </button>
@@ -1697,13 +1831,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onClick={() => setOrderFilter('delivered')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'delivered'
-                      ? 'bg-sky-950/80 text-sky-300 border border-sky-600 shadow-sm'
-                      : 'bg-[#15151E] text-neutral-400 hover:text-white border border-neutral-800'
+                      ? 'bg-sky-100 text-sky-900 border border-sky-400 shadow-sm'
+                      : 'bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/25'
                   }`}
                 >
-                  <Check className="w-3 h-3 text-sky-400" />
+                  <Check className="w-3 h-3 text-sky-600" />
                   <span>تم التسليم كاش</span>
-                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-sky-500/20 text-sky-400 font-mono">
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-sky-200/70 text-sky-900 font-mono">
                     {deliveredOrders.length}
                   </span>
                 </button>
@@ -1713,13 +1847,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onClick={() => setOrderFilter('rejected')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'rejected'
-                      ? 'bg-red-950/80 text-red-300 border border-red-600 shadow-sm'
-                      : 'bg-[#15151E] text-neutral-400 hover:text-white border border-neutral-800'
+                      ? 'bg-red-100 text-red-900 border border-red-400 shadow-sm'
+                      : 'bg-[#FAF7EF] text-neutral-600 hover:text-neutral-900 border border-[#D4AF37]/25'
                   }`}
                 >
-                  <XCircle className="w-3 h-3 text-red-400" />
+                  <XCircle className="w-3 h-3 text-red-600" />
                   <span>مرفوضة</span>
-                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-red-500/20 text-red-400 font-mono">
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-red-200/70 text-red-900 font-mono">
                     {rejectedOrders.length}
                   </span>
                 </button>
@@ -1728,10 +1862,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Orders List */}
             {filteredOrders.length === 0 ? (
-              <div className="py-16 text-center space-y-3 bg-[#111116] border border-neutral-800 rounded-2xl">
-                <ShoppingBag className="w-12 h-12 text-neutral-600 mx-auto" />
-                <h4 className="text-base font-bold text-white">لا توجد طلبات في هذا القسم</h4>
-                <p className="text-xs text-neutral-400">
+              <div className="py-16 text-center space-y-3 bg-white border border-[#D4AF37]/30 rounded-2xl shadow-sm">
+                <ShoppingBag className="w-12 h-12 text-[#B38728] mx-auto" />
+                <h4 className="text-base font-bold text-neutral-900">لا توجد طلبات في هذا القسم</h4>
+                <p className="text-xs text-neutral-500">
                   فور قيام أي زبون بالشراء والدفع كاش، سيظهر طلبه فوراً هنا بكل تفاصيل هاتفه وعنوانه لتتخذ قرار الموافقة عليه أو رفضه.
                 </p>
               </div>
@@ -1740,50 +1874,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 {filteredOrders.map((ord) => (
                   <div
                     key={ord.id}
-                    className={`bg-[#121218] rounded-2xl border p-5 sm:p-6 space-y-4 transition-all ${
+                    className={`bg-white rounded-2xl border p-5 sm:p-6 space-y-4 transition-all shadow-sm ${
                       ord.status === 'pending'
-                        ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+                        ? 'border-amber-400 shadow-[0_4px_20px_rgba(245,158,11,0.12)]'
                         : ord.status === 'approved'
-                        ? 'border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                        ? 'border-emerald-400 shadow-[0_4px_20px_rgba(16,185,129,0.12)]'
                         : ord.status === 'delivered'
-                        ? 'border-sky-500/30'
-                        : 'border-neutral-800 opacity-75'
+                        ? 'border-sky-400'
+                        : 'border-neutral-300 opacity-80'
                     }`}
                   >
                     {/* Top Row: Order ID, Date, and Status Badge */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#D4AF37]/20">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-base font-bold text-[#F3E5AB] dir-ltr">
+                        <span className="font-mono text-base font-bold text-[#7A5912] dir-ltr">
                           {ord.orderNumber}
                         </span>
-                        <span className="text-neutral-500">·</span>
-                        <span className="text-xs text-neutral-400">{formatDateTime(ord.createdAt)}</span>
+                        <span className="text-neutral-400">·</span>
+                        <span className="text-xs text-neutral-500">{formatDateTime(ord.createdAt)}</span>
                       </div>
 
                       {/* Status Badges */}
                       <div>
                         {ord.status === 'pending' && (
-                          <span className="px-3 py-1 text-xs font-bold text-amber-400 bg-amber-950/60 border border-amber-700/60 rounded-full flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5" />
+                          <span className="px-3 py-1 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-full flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
                             <span>بانتظار موافقتك</span>
                           </span>
                         )}
                         {ord.status === 'approved' && (
-                          <span className="px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-700/60 rounded-full flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>تمت الموافقة - جاهز للتوصيل</span>
+                          <span className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>تمت الموافقة - جاهز للتوصيل (تم خصم المخزون)</span>
                           </span>
                         )}
                         {ord.status === 'delivered' && (
-                          <span className="px-3 py-1 text-xs font-bold text-sky-400 bg-sky-950/60 border border-sky-700/60 rounded-full flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span className="px-3 py-1 text-xs font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded-full flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
                             <span>تم التوصيل واستلام الكاش</span>
                           </span>
                         )}
                         {ord.status === 'rejected' && (
-                          <span className="px-3 py-1 text-xs font-bold text-red-400 bg-red-950/60 border border-red-700/60 rounded-full flex items-center gap-1.5">
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>طلب مرفوض</span>
+                          <span className="px-3 py-1 text-xs font-bold text-red-800 bg-red-50 border border-red-300 rounded-full flex items-center gap-1.5">
+                            <XCircle className="w-3.5 h-3.5 text-red-600" />
+                            <span>طلب مرفوض (الكمية مسترجعة للمخزون)</span>
                           </span>
                         )}
                       </div>
@@ -1793,37 +1927,37 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                       
                       {/* Customer contact */}
-                      <div className="p-3.5 rounded-xl bg-[#171720] border border-neutral-800 space-y-2">
-                        <div className="font-bold text-[#F3E5AB] text-sm">{ord.customer?.name || 'الزبون'}</div>
+                      <div className="p-3.5 rounded-xl bg-[#FAF8F2] border border-[#D4AF37]/25 space-y-2">
+                        <div className="font-bold text-neutral-900 text-sm">{ord.customer?.name || 'الزبون'}</div>
                         {ord.customer?.phone && (
-                          <div className="flex items-center gap-2 text-neutral-300">
-                            <Phone className="w-4 h-4 text-[#D4AF37]" />
+                          <div className="flex items-center gap-2 text-neutral-700">
+                            <Phone className="w-4 h-4 text-[#B38728]" />
                             <span>رقم هاتف الزبون:</span>
                             <a
                               href={`tel:${ord.customer.phone}`}
                               dir="ltr"
-                              className="text-[#F3E5AB] font-mono font-bold hover:underline"
+                              className="text-[#7A5912] font-mono font-bold hover:underline"
                             >
                               {ord.customer.phone}
                             </a>
                           </div>
                         )}
-                        <div className="text-[11px] text-neutral-400">
+                        <div className="text-[11px] text-neutral-500">
                           حساب الزبون: {ord.customer?.contact || ord.customer?.phone || 'غير محدد'}
                         </div>
                       </div>
 
                       {/* Delivery Address */}
-                      <div className="p-3.5 rounded-xl bg-[#171720] border border-neutral-800 space-y-2">
-                        <div className="flex items-center gap-2 text-white font-semibold">
-                          <MapPin className="w-4 h-4 text-[#D4AF37]" />
+                      <div className="p-3.5 rounded-xl bg-[#FAF8F2] border border-[#D4AF37]/25 space-y-2">
+                        <div className="flex items-center gap-2 text-neutral-900 font-semibold">
+                          <MapPin className="w-4 h-4 text-[#B38728]" />
                           <span>موقع وعنوان التوصيل:</span>
                         </div>
-                        <p className="text-neutral-200 text-xs leading-relaxed">
+                        <p className="text-neutral-700 text-xs leading-relaxed">
                           {ord.customer?.address || 'العنوان غير محدد'}
                         </p>
                         {ord.customer?.notes && (
-                          <div className="text-[11px] text-amber-300/90 pt-1">
+                          <div className="text-[11px] text-amber-800 font-medium pt-1">
                             ملاحظة إضافية من الزبون: {ord.customer.notes}
                           </div>
                         )}
@@ -1833,38 +1967,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                     {/* Items Purchased List */}
                     <div className="space-y-2 text-xs">
-                      <div className="font-bold text-neutral-300">المنتجات في الطلب:</div>
+                      <div className="font-bold text-neutral-700">المنتجات في الطلب:</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {(ord.items || []).map((item, idx) => (
                           <div
-                            key={item?.product?.id || idx}
-                            className="p-2.5 rounded-lg bg-[#181822] border border-neutral-800 flex items-center justify-between"
+                            key={`${item?.product?.id || idx}-${item?.selectedOption || ''}`}
+                            className="p-2.5 rounded-lg bg-[#FAF8F2] border border-[#D4AF37]/25 flex items-center justify-between gap-2"
                           >
-                            <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <img
-                                src={item?.product?.image || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400&auto=format&fit=crop'}
+                                src={item?.selectedOptionImage || item?.product?.image || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400&auto=format&fit=crop'}
                                 alt={item?.product?.name || 'منتج'}
-                                className="w-10 h-10 object-contain rounded-md border border-neutral-700 bg-black"
+                                className="w-10 h-10 object-contain rounded-md border border-[#D4AF37]/30 bg-white shrink-0"
                               />
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-white text-xs sm:text-sm">{item?.product?.name || 'منتج'}</span>
-                                  {(item?.selectedSize || (item as any)?.size) && (
-                                    <span className="px-2 py-0.5 rounded-md bg-[#D4AF37] text-black font-extrabold text-[11px] shadow-[0_0_12px_rgba(212,175,55,0.4)] flex items-center gap-1 shrink-0">
-                                      <span>القياس:</span>
-                                      <span className="underline">{item?.selectedSize || (item as any)?.size}</span>
-                                    </span>
-                                  )}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-neutral-900 text-xs sm:text-sm">{item?.product?.name || 'منتج'}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-1">
-                                  <span>الكمية: <strong className="text-white font-mono">{item?.quantity || 1}</strong></span>
-                                  {!(item?.selectedSize || (item as any)?.size) && (
-                                    <span className="text-neutral-500 text-[10px]">(بدون قياس محدد)</span>
-                                  )}
+                                {item?.selectedOption && (
+                                  <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-[#D4AF37] text-[11px] font-extrabold text-[#7A5912] shadow-2xs">
+                                    <span>{item.selectedOptionLabel || item.product?.customOptionLabel || 'الخانة المحددة'}:</span>
+                                    <span className="text-neutral-950 underline">{item.selectedOption}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-[11px] text-neutral-600 mt-1">
+                                  <span>الكمية المطلوبة: <strong className="text-neutral-900 font-mono">{item?.quantity || 1}</strong></span>
                                 </div>
                               </div>
                             </div>
-                            <span className="font-bold text-[#F3E5AB] tabular-nums">
+                            <span className="font-bold text-[#7A5912] tabular-nums shrink-0">
                               {formatPrice((item?.product?.priceUSD || 0) * (item?.quantity || 1), ord.currency)}
                             </span>
                           </div>
@@ -1873,18 +2004,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     </div>
 
                     {/* Footer Row: Total Cash to Collect & Action Buttons (Approve / Reject) */}
-                    <div className="pt-3 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-4">
+                    <div className="pt-3 border-t border-[#D4AF37]/25 flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="text-xs text-neutral-400">سعر المنتجات:</span>
+                        <span className="text-xs text-neutral-600 font-semibold">سعر المنتجات:</span>
                         <span className="text-lg font-bold gold-gradient-text tabular-nums font-mono">
                           {formatPrice(ord.totalUSD, ord.currency)}
                         </span>
                         {(ord.isFreeShipping || ord.shippingUSD === 0) ? (
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/50">
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300">
                             + توصيل مجاني 🎉
                           </span>
                         ) : (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-[#1A1A24] text-[#F3E5AB] border border-neutral-700 font-mono">
+                          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-neutral-50 text-[#7A5912] border border-[#D4AF37]/40 font-mono">
                             + 5,000 د.ع توصيل
                           </span>
                         )}
@@ -1896,7 +2027,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <>
                             <button
                               onClick={() => onUpdateOrderStatus(ord.id, 'approved')}
-                              className="px-4 py-2 text-xs font-bold text-black bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                              className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
                             >
                               <CheckCircle2 className="w-4 h-4" />
                               <span>موافقة على الطلب</span>
@@ -1908,9 +2039,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 setRejectReason('الزبون ألغى الطلب أو تعذر التواصل معه');
                                 setCustomRejectReason('');
                               }}
-                              className="px-3.5 py-2 text-xs font-semibold text-red-300 hover:text-white bg-red-950/70 hover:bg-red-900 border border-red-800 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              className="px-3.5 py-2 text-xs font-bold text-red-700 hover:text-white bg-red-50 hover:bg-red-600 border border-red-300 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                             >
-                              <XCircle className="w-4 h-4 text-red-400" />
+                              <XCircle className="w-4 h-4" />
                               <span>رفض الطلب</span>
                             </button>
                           </>
@@ -1920,7 +2051,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <>
                             <button
                               onClick={() => onUpdateOrderStatus(ord.id, 'delivered')}
-                              className="px-4 py-2 text-xs font-bold text-black gold-gradient-bg hover:brightness-110 rounded-lg shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                              className="px-4 py-2 text-xs font-bold text-black gold-gradient-bg hover:brightness-110 rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
                             >
                               <Banknote className="w-4 h-4 fill-black" />
                               <span>تم التوصيل واستلام الكاش من الزبون</span>
@@ -1933,10 +2064,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 setRejectReason('الزبون لم يستلم الطلب عند وصول المندوب');
                                 setCustomRejectReason('');
                               }}
-                              className="px-3.5 py-2 text-xs font-semibold text-red-300 hover:text-white bg-red-950/70 hover:bg-red-900 border border-red-800/80 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              className="px-3.5 py-2 text-xs font-bold text-red-700 hover:text-white bg-red-50 hover:bg-red-600 border border-red-300 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                               title="رفض الطلب إذا تعذر التسليم أو رفض الزبون الاستلام"
                             >
-                              <XCircle className="w-4 h-4 text-red-400" />
+                              <XCircle className="w-4 h-4" />
                               <span>رفض الطلب (لم يستلم الزبون)</span>
                             </button>
                           </>
@@ -1948,7 +2079,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               onUpdateOrderStatus(ord.id, 'approved');
                               showToast(`تم إعادة تفعيل الطلب #${ord.orderNumber} والموافقة عليه`);
                             }}
-                            className="px-3 py-2 text-xs font-semibold text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-800 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            className="px-3 py-2 text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-300 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>إعادة فتح والموافقة على الطلب</span>
@@ -1957,25 +2088,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                         <button
                           onClick={() => handleSendOrderWhatsApp(ord)}
-                          className="px-3 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-600 border border-emerald-500/50 rounded-lg flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                          className="px-3 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-700 rounded-lg flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                           title="إرسال رسالة تفاصيل الطلب وتأكيده للزبون عبر الواتساب"
                         >
-                          <MessageCircle className="w-4 h-4 text-emerald-300" />
+                          <MessageCircle className="w-4 h-4 text-white" />
                           <span>إرسال واتساب للزبون</span>
                         </button>
 
                         <button
                           onClick={() => setWaybillOrder(ord)}
-                          className="px-3 py-2 text-xs font-semibold text-[#F3E5AB] bg-[#181822] hover:bg-[#22222E] border border-[#D4AF37]/40 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-3 py-2 text-xs font-bold text-[#7A5912] bg-neutral-50 hover:bg-[#FAF4E1] border border-[#D4AF37]/45 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                           title="عرض وطباعة بوليصة التوصيل للمندوب"
                         >
-                          <Printer className="w-4 h-4 text-[#D4AF37]" />
+                          <Printer className="w-4 h-4 text-[#B38728]" />
                           <span>طباعة بوليصة للمندوب</span>
                         </button>
 
                         <button
                           onClick={() => onDeleteOrder(ord.id)}
-                          className="p-2 text-neutral-500 hover:text-red-400 transition-colors"
+                          className="p-2 text-neutral-400 hover:text-red-600 transition-colors cursor-pointer"
                           title="حذف سجل الطلب"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1995,67 +2126,63 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         {activeTab === 'delivered' && (
           <div key="tab-delivered" className="space-y-6 animate-mac-tab text-right">
             
-            {/* Hero Profit Summary Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#121A14] via-[#11141B] to-[#121218] border-2 border-emerald-500/50 p-5 sm:p-7 shadow-[0_0_40px_rgba(16,185,129,0.15)]">
-              {/* Background Ambient Glow */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-80 h-80 bg-[#D4AF37]/10 rounded-full blur-3xl pointer-events-none" />
-
+            {/* Hero Profit Summary Banner (Clean White & Emerald/Gold Accents) */}
+            <div className="relative overflow-hidden rounded-3xl bg-white border-2 border-emerald-400 p-5 sm:p-7 shadow-md">
               <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
                 <div className="space-y-2 text-right">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold shadow-sm">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>خزينة أرباح الطلبات المستلمة (كاش فعلي)</span>
                   </div>
 
-                  <h2 className="text-xl sm:text-2xl font-black text-white">
+                  <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                     إجمالي أرباح ومبالغ الطلبات المستلمة
                   </h2>
-                  <p className="text-xs text-neutral-300 max-w-xl leading-relaxed">
+                  <p className="text-xs text-neutral-600 max-w-xl leading-relaxed">
                     المبالغ المحصلة من الطلبات التي تم تسليمها للزبائن واستلام ثمنها نقداً بنجاح.
                   </p>
                 </div>
 
                 {/* Big Profit Counter Display */}
-                <div className="w-full lg:w-auto p-4 sm:p-5 rounded-2xl bg-[#090C0F]/90 border border-emerald-500/50 text-center space-y-1 shrink-0 shadow-lg">
-                  <span className="text-xs text-emerald-300 font-bold block">مجموع الكاش المستلم:</span>
-                  <div className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight tabular-nums">
+                <div className="w-full lg:w-auto p-4 sm:p-5 rounded-2xl bg-emerald-50/70 border border-emerald-300 text-center space-y-1 shrink-0 shadow-xs">
+                  <span className="text-xs text-emerald-800 font-bold block">مجموع الكاش المستلم:</span>
+                  <div className="text-3xl sm:text-4xl font-black text-emerald-700 font-mono tracking-tight tabular-nums">
                     {formatPrice(totalDeliveredProfitIQD, 'IQD')}
                   </div>
-                  <div className="text-[11px] text-neutral-400 font-medium">
-                    من إجمالي <strong className="text-white font-mono">{deliveredOrdersList.length}</strong> طلب مكتمل
+                  <div className="text-[11px] text-neutral-600 font-medium">
+                    من إجمالي <strong className="text-neutral-900 font-mono">{deliveredOrdersList.length}</strong> طلب مكتمل
                   </div>
                 </div>
               </div>
 
-              {/* KPI Mini Stats Grid - Perfectly symmetrical & uniform heights on all screens */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-5 pt-5 border-t border-neutral-800/80">
-                <div className="p-4 rounded-xl bg-[#14141E]/90 border border-neutral-800 flex items-center justify-between shadow-sm">
+              {/* KPI Mini Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-5 pt-5 border-t border-[#D4AF37]/25">
+                <div className="p-4 rounded-xl bg-neutral-50 border border-[#D4AF37]/30 flex items-center justify-between shadow-xs">
                   <div className="space-y-1">
-                    <span className="text-xs text-neutral-400 block font-medium">عدد الطلبات المستلمة</span>
-                    <div className="text-xl font-black text-white font-mono">{deliveredOrdersList.length} طلب</div>
+                    <span className="text-xs text-neutral-500 block font-semibold">عدد الطلبات المستلمة</span>
+                    <div className="text-xl font-black text-neutral-900 font-mono">{deliveredOrdersList.length} طلب</div>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-emerald-950/60 border border-emerald-700/60 flex items-center justify-center text-emerald-400 shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-center text-emerald-600 shrink-0">
                     <Check className="w-5 h-5" />
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#14141E]/90 border border-neutral-800 flex items-center justify-between shadow-sm">
+                <div className="p-4 rounded-xl bg-neutral-50 border border-[#D4AF37]/30 flex items-center justify-between shadow-xs">
                   <div className="space-y-1">
-                    <span className="text-xs text-neutral-400 block font-medium">إجمالي القطع المباعة</span>
-                    <div className="text-xl font-black text-[#F3E5AB] font-mono">{totalDeliveredItemsCount} قطعة</div>
+                    <span className="text-xs text-neutral-500 block font-semibold">إجمالي القطع المباعة</span>
+                    <div className="text-xl font-black text-[#7A5912] font-mono">{totalDeliveredItemsCount} قطعة</div>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-[#241F15] border border-[#D4AF37]/50 flex items-center justify-center text-[#D4AF37] shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[#D4AF37]/45 flex items-center justify-center text-[#B38728] shrink-0">
                     <Package className="w-5 h-5" />
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#14141E]/90 border border-neutral-800 flex items-center justify-between shadow-sm">
+                <div className="p-4 rounded-xl bg-neutral-50 border border-[#D4AF37]/30 flex items-center justify-between shadow-xs">
                   <div className="space-y-1">
-                    <span className="text-xs text-neutral-400 block font-medium">متوسط قيمة الطلب</span>
-                    <div className="text-xl font-black text-emerald-300 font-mono">{formatPrice(avgDeliveredOrderIQD, 'IQD')}</div>
+                    <span className="text-xs text-neutral-500 block font-semibold">متوسط قيمة الطلب</span>
+                    <div className="text-xl font-black text-emerald-700 font-mono">{formatPrice(avgDeliveredOrderIQD, 'IQD')}</div>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-emerald-950/60 border border-emerald-700/60 flex items-center justify-center text-emerald-400 shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-center text-emerald-600 shrink-0">
                     <Banknote className="w-5 h-5" />
                   </div>
                 </div>
@@ -2063,7 +2190,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Filter & Search Bar for Delivered Orders */}
-            <div className="bg-[#111116] border border-neutral-800 rounded-2xl p-4 space-y-3.5">
+            <div className="bg-white border border-[#D4AF37]/35 rounded-2xl p-4 space-y-3.5 shadow-sm">
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                 {/* Search input */}
                 <div className="relative flex-1 max-w-md">
@@ -2072,13 +2199,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     placeholder="ابحث برقم الطلب المستلم، اسم الزبون، هاتفه، أو المدينة..."
                     value={deliveredSearchTerm}
                     onChange={(e) => setDeliveredSearchTerm(e.target.value)}
-                    className="w-full pr-9 pl-4 py-2 bg-[#171722] border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full pr-9 pl-4 py-2 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 outline-none focus:border-emerald-500 transition-colors"
                   />
-                  <Search className="w-4 h-4 text-neutral-400 absolute right-3 top-2.5 pointer-events-none" />
+                  <Search className="w-4 h-4 text-[#B38728] absolute right-3 top-2.5 pointer-events-none" />
                   {deliveredSearchTerm && (
                     <button
                       onClick={() => setDeliveredSearchTerm('')}
-                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-white"
+                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-neutral-900"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2087,11 +2214,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                 {/* Sort Order Selector */}
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-neutral-400 font-medium">ترتيب حسب:</span>
+                  <span className="text-neutral-600 font-semibold">ترتيب حسب:</span>
                   <select
                     value={deliveredSortOrder}
                     onChange={(e) => setDeliveredSortOrder(e.target.value as any)}
-                    className="bg-[#171722] border border-neutral-700 rounded-xl px-3 py-2 text-xs text-neutral-200 outline-none focus:border-emerald-500"
+                    className="bg-neutral-50 border border-[#D4AF37]/35 rounded-xl px-3 py-2 text-xs text-neutral-900 font-semibold outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="newest">الأحدث استلاماً</option>
                     <option value="oldest">الأقدم استلاماً</option>
@@ -2100,10 +2227,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                   <button
                     onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1C1C26] hover:bg-[#252533] border border-neutral-700 text-xs font-bold text-neutral-200 hover:text-white transition-all cursor-pointer shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-50 hover:bg-emerald-50 border border-[#D4AF37]/40 text-xs font-bold text-neutral-800 hover:text-emerald-800 transition-all cursor-pointer shadow-xs"
                     title="طباعة تقرير المبيعات والأرباح"
                   >
-                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
                     <span className="hidden sm:inline">طباعة التقرير</span>
                   </button>
                 </div>
@@ -2112,17 +2239,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Delivered Orders List Cards */}
             {filteredDeliveredOrders.length === 0 ? (
-              <div className="py-16 text-center space-y-4 bg-[#111116] border border-neutral-800 rounded-3xl p-6">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center mx-auto text-emerald-400 shadow-inner">
+              <div className="py-16 text-center space-y-4 bg-white border border-[#D4AF37]/35 rounded-3xl p-6 shadow-sm">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h4 className="text-lg font-bold text-white">لا توجد طلبات مستلمة بعد</h4>
-                <p className="text-xs sm:text-sm text-neutral-400 max-w-md mx-auto leading-relaxed">
-                  عند وصول طلب جديد وتوصيله للزبون واستلام ثمنه، قم بتحويل حالة الطلب في قسم "إدارة طلبات الزبائن" إلى <strong className="text-emerald-400">"تم التوصيل واستلام الكاش"</strong> لتظهر جميع أرباحه وتفاصيله هنا تلقائياً.
+                <h4 className="text-lg font-bold text-neutral-900">لا توجد طلبات مستلمة بعد</h4>
+                <p className="text-xs sm:text-sm text-neutral-600 max-w-md mx-auto leading-relaxed">
+                  عند وصول طلب جديد وتوصيله للزبون واستلام ثمنه، قم بتحويل حالة الطلب في قسم "إدارة طلبات الزبائن" إلى <strong className="text-emerald-700">"تم التوصيل واستلام الكاش"</strong> لتظهر جميع أرباحه وتفاصيله هنا تلقائياً.
                 </p>
                 <button
                   onClick={() => setActiveTab('orders')}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#AA7A1E] text-black font-bold text-xs hover:brightness-110 transition shadow-md"
+                  className="px-5 py-2.5 rounded-xl gold-gradient-bg text-black font-bold text-xs hover:brightness-110 transition shadow-md cursor-pointer"
                 >
                   الانتقال لإدارة الطلبات
                 </button>
@@ -2134,21 +2261,21 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   return (
                     <div
                       key={ord.id}
-                      className="bg-[#121218] rounded-2xl border border-emerald-500/40 p-5 sm:p-6 space-y-4 shadow-[0_0_20px_rgba(16,185,129,0.08)] hover:border-emerald-500/70 transition-all"
+                      className="bg-white rounded-2xl border border-emerald-400 p-5 sm:p-6 space-y-4 shadow-sm hover:border-emerald-500 transition-all"
                     >
                       {/* Top Bar: Order ID, Delivered Badge & Cash Amount */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#D4AF37]/20">
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-base font-bold text-[#F3E5AB] dir-ltr">
+                          <span className="font-mono text-base font-bold text-[#7A5912] dir-ltr">
                             {ord.orderNumber}
                           </span>
-                          <span className="text-neutral-500">·</span>
-                          <span className="text-xs text-neutral-400">{formatDateTime(ord.createdAt)}</span>
+                          <span className="text-neutral-400">·</span>
+                          <span className="text-xs text-neutral-500">{formatDateTime(ord.createdAt)}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-600 rounded-full flex items-center gap-1.5 shadow-sm">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full flex items-center gap-1.5 shadow-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>تم الاستلام وتحصيل الكاش بنجاح</span>
                           </span>
                         </div>
@@ -2158,17 +2285,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                         
                         {/* Customer contact card */}
-                        <div className="p-3.5 rounded-xl bg-[#171720] border border-neutral-800 space-y-2">
-                          <span className="text-neutral-400 block font-semibold text-[11px]">بيانات المشتري:</span>
-                          <div className="font-bold text-[#F3E5AB] text-sm">{ord.customer?.name || 'الزبون'}</div>
+                        <div className="p-3.5 rounded-xl bg-neutral-50 border border-[#D4AF37]/25 space-y-2">
+                          <span className="text-neutral-500 block font-semibold text-[11px]">بيانات المشتري:</span>
+                          <div className="font-bold text-neutral-900 text-sm">{ord.customer?.name || 'الزبون'}</div>
                           {ord.customer?.phone && (
-                            <div className="flex items-center gap-2 text-neutral-300">
-                              <Phone className="w-4 h-4 text-[#D4AF37]" />
+                            <div className="flex items-center gap-2 text-neutral-700">
+                              <Phone className="w-4 h-4 text-[#B38728]" />
                               <span>الهاتف:</span>
                               <a
                                 href={`tel:${ord.customer.phone}`}
                                 dir="ltr"
-                                className="text-[#F3E5AB] font-mono font-bold hover:underline"
+                                className="text-[#7A5912] font-mono font-bold hover:underline"
                               >
                                 {ord.customer.phone}
                               </a>
@@ -2177,24 +2304,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </div>
 
                         {/* Delivery address */}
-                        <div className="p-3.5 rounded-xl bg-[#171720] border border-neutral-800 space-y-1.5">
-                          <span className="text-neutral-400 block font-semibold text-[11px]">عنوان الاستلام والتوصيل:</span>
-                          <div className="flex items-center gap-1.5 text-neutral-200 font-medium">
-                            <MapPin className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                        <div className="p-3.5 rounded-xl bg-neutral-50 border border-[#D4AF37]/25 space-y-1.5">
+                          <span className="text-neutral-500 block font-semibold text-[11px]">عنوان الاستلام والتوصيل:</span>
+                          <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
+                            <MapPin className="w-4 h-4 text-[#B38728] shrink-0" />
                             <span>المحافظة: {ord.customer?.city || 'غير محدد'}</span>
                           </div>
-                          <div className="text-neutral-400 text-[11px] leading-relaxed">
+                          <div className="text-neutral-600 text-[11px] leading-relaxed">
                             العنوان التفصيلي: {ord.customer?.address || 'غير محدد'}
                           </div>
                         </div>
 
                         {/* Financial profit box */}
-                        <div className="p-3.5 rounded-xl bg-[#131E17] border border-emerald-500/40 flex flex-col justify-between">
-                          <span className="text-emerald-300 text-[11px] font-bold block">المبلغ المستلم كاش:</span>
-                          <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight my-1">
+                        <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-300 flex flex-col justify-between">
+                          <span className="text-emerald-800 text-[11px] font-bold block">المبلغ المستلم كاش:</span>
+                          <div className="text-2xl font-black text-emerald-700 font-mono tracking-tight my-1">
                             {formatPrice(ord.totalUSD, 'IQD')}
                           </div>
-                          <div className="text-[11px] text-neutral-400">
+                          <div className="text-[11px] text-neutral-600">
                             الدفع كاش عند الاستلام ({itemsCount} قطع)
                           </div>
                         </div>
@@ -2202,32 +2329,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
 
                       {/* Items Purchased in this delivered order */}
-                      <div className="p-3.5 rounded-xl bg-[#15151E] border border-neutral-800 space-y-2">
-                        <span className="text-neutral-400 text-xs font-semibold block">
+                      <div className="p-3.5 rounded-xl bg-neutral-50 border border-[#D4AF37]/25 space-y-2">
+                        <span className="text-neutral-600 text-xs font-semibold block">
                           المنتجات المستلمة في هذا الطلب:
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {(ord.items || []).map((item, idx) => (
                             <div
                               key={idx}
-                              className="p-2 bg-[#1A1A24] rounded-lg border border-neutral-700/80 flex items-center gap-2.5"
+                              className="p-2 bg-white rounded-lg border border-[#D4AF37]/25 flex items-center gap-2.5"
                             >
                               <img
-                                src={item.product?.image || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop'}
+                                src={item?.selectedOptionImage || item.product?.image || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop'}
                                 alt={item.product?.name}
-                                className="w-10 h-10 object-contain rounded bg-black p-0.5 border border-neutral-700 shrink-0"
+                                className="w-10 h-10 object-contain rounded bg-neutral-50 p-0.5 border border-[#D4AF37]/30 shrink-0"
                               />
                               <div className="min-w-0 flex-1 text-right">
-                                <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+                                <div className="text-xs font-bold text-neutral-900 flex items-center gap-1.5 flex-wrap">
                                   <span className="truncate">{item.product?.name}</span>
-                                  {(item.selectedSize || (item as any)?.size) && (
-                                    <span className="text-black font-extrabold bg-[#D4AF37] px-2 py-0.5 rounded text-[10px] shadow-sm">
-                                      القياس: {item.selectedSize || (item as any)?.size}
-                                    </span>
-                                  )}
                                 </div>
+                                {item?.selectedOption && (
+                                  <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#FAF7EF] border border-[#D4AF37]/50 text-[10px] font-extrabold text-[#7A5912]">
+                                    <span>{item.selectedOptionLabel || item.product?.customOptionLabel || 'الخانة'}:</span>
+                                    <span className="text-neutral-950">{item.selectedOption}</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2 text-[11px] mt-1">
-                                  <span className="text-[#F3E5AB] font-mono">
+                                  <span className="text-[#7A5912] font-mono font-bold">
                                     {item.quantity} × {formatPrice(item.product?.priceUSD, 'IQD')}
                                   </span>
                                 </div>
@@ -2238,17 +2366,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
 
                       {/* Action buttons */}
-                      <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs">
-                        <span className="text-neutral-400 text-[11px]">
+                      <div className="pt-2 border-t border-[#D4AF37]/20 flex items-center justify-between text-xs">
+                        <span className="text-neutral-500 text-[11px]">
                           طريقة الدفع: الدفع نقداً عند استلام الشحنة
                         </span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleSendOrderWhatsApp(ord)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition cursor-pointer text-[11px] flex items-center gap-1.5 shadow-sm"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition cursor-pointer text-[11px] flex items-center gap-1.5 shadow-sm"
                           >
-                            <MessageCircle className="w-3.5 h-3.5 text-emerald-300" />
+                            <MessageCircle className="w-3.5 h-3.5 text-white" />
                             <span>مراسلة واتساب</span>
                           </button>
                           <button
@@ -2257,8 +2385,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               onUpdateOrderStatus(ord.id, 'approved');
                               showToast(`تم إعادة الطلب #${ord.orderNumber} إلى قائمة الطلبات المعتمدة`);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition cursor-pointer text-[11px]"
-                            title="إعادة تعيين الحالة إذا حدث خطأ"
+                            className="px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-900 border border-neutral-300 transition cursor-pointer text-[11px]"
+                            title="إعادة تعيين الحالة إذا حدثأ"
                           >
                             إلغاء وضع الاستلام
                           </button>
@@ -2274,13 +2402,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           </div>
         )}
 
-        {/* ================= TAB 2: PRODUCTS LIST & EDIT ================= */}
+        {/* ================= TAB 2: PRODUCTS LIST & INVENTORY EDIT ================= */}
         {activeTab === 'products' && (
           <div key="tab-products" className="space-y-4 animate-mac-tab">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white">المنتجات المعروضة في متجرك حالياً</h3>
-                <p className="text-xs text-neutral-400">يمكنك تعديل الأسعار، تغيير الكمية، أو حذف أي منتج فوراً</p>
+                <h3 className="text-base font-bold text-neutral-900">المنتجات والمخزون المتوفر في متجرك</h3>
+                <p className="text-xs text-neutral-600">يمكنك تعديل الأسعار، زيادة أو تقليل كمية المخزون المتوفرة، أو حذف أي منتج فوراً</p>
               </div>
 
               <button
@@ -2294,17 +2422,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Dedicated Marquee Strip Management Box */}
             {products.length > 0 && (
-              <div className="bg-[#121218] border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 space-y-3 shadow-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-neutral-800">
+              <div className="bg-white border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#D4AF37]/20">
                   <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-[#D4AF37]/20 text-[#D4AF37]">
+                    <span className="p-1.5 rounded-lg bg-[#FAF6EA] text-[#B38728] border border-[#D4AF37]/30">
                       <Sparkles className="w-4 h-4" />
                     </span>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white">
+                      <h4 className="text-xs sm:text-sm font-bold text-neutral-900">
                         إدارة شريط صور المنتجات المتحرك (بالصفحة الرئيسية)
                       </h4>
-                      <p className="text-[11px] text-neutral-400">
+                      <p className="text-[11px] text-neutral-500">
                         حدد المنتجات التي تريد ظهور صورها في المستطيل المتحرك أسفل قسم الترحيب
                       </p>
                     </div>
@@ -2315,13 +2443,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       const count = products.filter((p) => p.isFeaturedInStrip).length;
                       if (count < 6) {
                         return (
-                          <span className="text-xs font-bold text-amber-400 bg-amber-950/70 border border-amber-800/80 px-3 py-1 rounded-lg">
+                          <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300 px-3 py-1 rounded-lg">
                             🟡 غير نشط بالرئيسية (المحدد: {count}/6 - يلزم {6 - count} إضافية)
                           </span>
                         );
                       }
                       return (
-                        <span className="text-xs font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-3 py-1 rounded-lg">
+                        <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-lg">
                           🟢 نشط ويعمل بالرئيسية ({count}/10 منتجات)
                         </span>
                       );
@@ -2367,19 +2495,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         }}
                         className={`p-2 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center gap-1.5 ${
                           isSelected
-                            ? 'bg-[#242014] border-[#D4AF37] shadow-[0_0_12px_rgba(212,175,55,0.25)]'
-                            : 'bg-[#161620] border-neutral-800 opacity-60 hover:opacity-100 hover:border-neutral-600'
+                            ? 'bg-[#FAF6EA] border-[#D4AF37] shadow-[0_0_12px_rgba(212,175,55,0.2)]'
+                            : 'bg-[#FAF8F2] border-[#D4AF37]/20 opacity-70 hover:opacity-100 hover:border-[#D4AF37]/50'
                         }`}
                       >
-                        <div className="relative w-12 h-12 bg-black rounded-lg overflow-hidden border border-neutral-700/80 p-1 flex items-center justify-center">
+                        <div className="relative w-12 h-12 bg-white rounded-lg overflow-hidden border border-[#D4AF37]/30 p-1 flex items-center justify-center">
                           <img src={p.image} alt="" className="w-full h-full object-contain" />
                           <span className={`absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            isSelected ? 'bg-[#D4AF37] text-black' : 'bg-neutral-800 text-neutral-400'
+                            isSelected ? 'bg-[#D4AF37] text-black' : 'bg-neutral-200 text-neutral-600'
                           }`}>
                             {isSelected ? '✓' : ''}
                           </span>
                         </div>
-                        <span className="text-[11px] font-semibold text-white truncate w-full">
+                        <span className="text-[11px] font-semibold text-neutral-900 truncate w-full">
                           {p.name}
                         </span>
                       </div>
@@ -2390,28 +2518,31 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             )}
 
             {products.length === 0 ? (
-              <div className="py-16 text-center space-y-3 bg-[#111116] border border-neutral-800 rounded-2xl">
-                <Package className="w-12 h-12 text-neutral-600 mx-auto" />
-                <h4 className="text-base font-bold text-white">لا توجد أي منتجات معروضة بعد</h4>
-                <p className="text-xs text-neutral-400">
-                  انقر على زر "إضافة منتج جديد" لعرض أول سلعة تبيعها في متجر LC مع إمكانية رفع عدة صور
+              <div className="py-16 text-center space-y-3 bg-white border border-[#D4AF37]/30 rounded-2xl shadow-sm">
+                <Package className="w-12 h-12 text-[#B38728] mx-auto" />
+                <h4 className="text-base font-bold text-neutral-900">لا توجد أي منتجات معروضة بعد</h4>
+                <p className="text-xs text-neutral-500">
+                  انقر على زر "إضافة منتج جديد" لعرض أول سلعة تبيعها في متجر LC مع تحديد الكمية المتوفرة بالمخزون
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {products.map((p) => {
                   const imageCount = p.images?.length || 1;
+                  const currentStock = typeof p.stockCount === 'number' ? Math.max(0, p.stockCount) : (p.inStock === false ? 0 : 10);
+                  const isOut = currentStock <= 0;
+
                   return (
                     <div
                       key={p.id}
-                      className="p-4 bg-[#121218] border border-neutral-800 hover:border-[#D4AF37]/50 rounded-xl space-y-3 transition-all"
+                      className="p-4 bg-white border border-[#D4AF37]/30 hover:border-[#D4AF37] rounded-xl space-y-3 transition-all shadow-sm"
                     >
                       <div className="flex gap-3">
                         <div className="relative shrink-0">
                           <img
                             src={p.image}
                             alt={p.name}
-                            className="w-16 h-16 object-contain rounded-lg border border-neutral-700 bg-black p-1"
+                            className="w-16 h-16 object-contain rounded-lg border border-[#D4AF37]/35 bg-[#FAF8F2] p-1"
                           />
                           {imageCount > 1 && (
                             <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-[#D4AF37] text-black text-[9px] font-bold rounded-full">
@@ -2420,19 +2551,182 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className="text-[11px] text-[#D4AF37] font-semibold">{p.categoryLabel}</span>
-                          <h4 className="text-xs font-bold text-white truncate">{p.name}</h4>
-                          <div className="text-sm font-bold text-[#F3E5AB] font-mono mt-1">
+                          <span className="text-[11px] text-[#8B6914] font-semibold">{p.categoryLabel}</span>
+                          <h4 className="text-xs font-bold text-neutral-900 truncate">{p.name}</h4>
+                          <div className="text-sm font-bold text-[#7A5912] font-mono mt-1">
                             {formatPrice(p.priceUSD, currency)}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-neutral-400 line-clamp-2">
+                      <div className="text-[11px] text-neutral-600 line-clamp-2">
                         {p.shortDesc}
                       </div>
 
-                      <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs gap-2">
+                      {/* Display Variant Options with Per-Option Stock Controls & Linked Image */}
+                      {(() => {
+                        const prodVariants = getProductVariants(p);
+                        if (prodVariants.length > 0) {
+                          return (
+                            <div className="p-2.5 rounded-xl bg-[#FAF8F2] border border-[#D4AF37]/35 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-[#8B6914]">
+                                  {p.customOptionLabel?.trim() || 'مخزون وصور الخانات / الألوان'}:
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-neutral-600">
+                                  الإجمالي: {currentStock} قطعة
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
+                                {prodVariants.map((v, vIdx) => (
+                                  <div
+                                    key={v.name}
+                                    className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-[#D4AF37]/30"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {v.image ? (
+                                        <img
+                                          src={v.image}
+                                          alt={v.name}
+                                          className="w-7 h-7 rounded object-contain bg-[#FAF8F2] border border-[#D4AF37]/30 shrink-0 p-0.5"
+                                        />
+                                      ) : (
+                                        <div className="w-7 h-7 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[9px] text-neutral-400 shrink-0">
+                                          صورة
+                                        </div>
+                                      )}
+                                      <div className="min-w-0">
+                                        <span className="text-[11px] font-bold text-neutral-900 block truncate">
+                                          {v.name}
+                                        </span>
+                                        <span className={`text-[9px] font-mono font-bold ${v.stockCount > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                          {v.stockCount > 0 ? `${v.stockCount} بالخزين` : 'نفذ (0)'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextVariants = prodVariants.map((item, idx) =>
+                                            idx === vIdx ? { ...item, stockCount: Math.max(0, item.stockCount - 1) } : item
+                                          );
+                                          const nextTotal = nextVariants.reduce((s, item) => s + item.stockCount, 0);
+                                          onUpdateProduct({
+                                            ...p,
+                                            variantOptions: nextVariants,
+                                            customOptions: nextVariants.map((item) => item.name),
+                                            stockCount: nextTotal,
+                                            inStock: nextTotal > 0
+                                          });
+                                        }}
+                                        disabled={v.stockCount <= 0}
+                                        className="w-6 h-6 rounded bg-[#FAF7EF] hover:bg-neutral-200 border border-[#D4AF37]/40 text-neutral-800 font-bold text-xs flex items-center justify-center cursor-pointer disabled:opacity-40"
+                                      >
+                                        -
+                                      </button>
+                                      <span className="w-7 text-center font-mono font-bold text-xs text-neutral-900">
+                                        {v.stockCount}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextVariants = prodVariants.map((item, idx) =>
+                                            idx === vIdx ? { ...item, stockCount: item.stockCount + 1 } : item
+                                          );
+                                          const nextTotal = nextVariants.reduce((s, item) => s + item.stockCount, 0);
+                                          onUpdateProduct({
+                                            ...p,
+                                            variantOptions: nextVariants,
+                                            customOptions: nextVariants.map((item) => item.name),
+                                            stockCount: nextTotal,
+                                            inStock: nextTotal > 0
+                                          });
+                                        }}
+                                        className="w-6 h-6 rounded bg-[#FAF7EF] hover:bg-[#FAF4E1] border border-[#D4AF37]/40 text-[#7A5912] font-bold text-xs flex items-center justify-center cursor-pointer"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                            isOut
+                              ? 'bg-red-50 border-red-300'
+                              : currentStock <= 3
+                              ? 'bg-amber-50 border-amber-300'
+                              : 'bg-[#FAF7EF] border-[#D4AF37]/35'
+                          }`}>
+                            <div className="text-xs">
+                              <span className="text-neutral-600 text-[11px] block">المخزون المتوفر:</span>
+                              {isOut ? (
+                                <span className="font-bold text-red-700 text-xs">نفذ من المخزون (0 قطعة)</span>
+                              ) : (
+                                <span className="font-extrabold text-[#7A5912] font-mono text-xs">
+                                  {currentStock} قطعة متوفرة
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextStock = Math.max(0, currentStock - 1);
+                                  onUpdateProduct({
+                                    ...p,
+                                    stockCount: nextStock,
+                                    inStock: nextStock > 0
+                                  });
+                                }}
+                                disabled={currentStock <= 0}
+                                className="w-7 h-7 rounded-lg bg-white hover:bg-neutral-100 border border-[#D4AF37]/40 text-neutral-800 font-bold text-sm flex items-center justify-center cursor-pointer disabled:opacity-40"
+                                title="إنقاص قطعة من المخزون"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min={0}
+                                value={currentStock}
+                                onChange={(e) => {
+                                  const nextStock = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                                  onUpdateProduct({
+                                    ...p,
+                                    stockCount: nextStock,
+                                    inStock: nextStock > 0
+                                  });
+                                }}
+                                className="w-12 h-7 text-center bg-white border border-[#D4AF37]/45 rounded-lg text-xs font-mono font-bold text-neutral-900 outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextStock = currentStock + 1;
+                                  onUpdateProduct({
+                                    ...p,
+                                    stockCount: nextStock,
+                                    inStock: true
+                                  });
+                                }}
+                                className="w-7 h-7 rounded-lg bg-white hover:bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#7A5912] font-bold text-sm flex items-center justify-center cursor-pointer"
+                                title="زيادة قطعة للمخزون"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      <div className="pt-2 border-t border-[#D4AF37]/20 flex items-center justify-between text-xs gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -2448,8 +2742,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           }}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
                             p.isFeaturedInStrip
-                              ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37] shadow-[0_0_10px_rgba(212,175,55,0.2)]'
-                              : 'bg-[#181822] text-neutral-400 border-neutral-700 hover:text-white'
+                              ? 'bg-[#FAF6EA] text-[#7A5912] border-[#D4AF37] shadow-sm'
+                              : 'bg-[#FAF8F2] text-neutral-600 border-[#D4AF37]/25 hover:text-neutral-900'
                           }`}
                           title="تحديد ظهور هذا المنتج في الشريط المتحرك التفاعلي"
                         >
@@ -2459,15 +2753,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => setEditingProduct(p)}
-                            className="p-1.5 text-neutral-300 hover:text-[#D4AF37] bg-[#181822] border border-neutral-800 rounded-md"
-                            title="تعديل تفاصيل وسعر وصور المنتج"
+                            onClick={() =>
+                              setEditingProduct({
+                                ...p,
+                                variantOptions: getProductVariants(p)
+                              })
+                            }
+                            className="p-1.5 text-neutral-600 hover:text-[#7A5912] bg-[#FAF7EF] border border-[#D4AF37]/30 rounded-md cursor-pointer"
+                            title="تعديل تفاصيل وسعر ومخزون المنتج"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => onDeleteProduct(p.id)}
-                            className="p-1.5 text-neutral-300 hover:text-red-400 bg-[#181822] border border-neutral-800 rounded-md"
+                            className="p-1.5 text-neutral-600 hover:text-red-600 bg-[#FAF7EF] border border-[#D4AF37]/30 rounded-md cursor-pointer"
                             title="حذف المنتج من المتجر"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2484,58 +2783,58 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
         {/* ================= TAB 3: ADD NEW PRODUCT (ORGANIZED & CLEAN) ================= */}
         {activeTab === 'add' && (
-          <div key="tab-add" className="max-w-3xl mx-auto bg-[#111116] border border-[#D4AF37]/35 rounded-3xl p-6 sm:p-8 space-y-6 animate-mac-tab shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
+          <div key="tab-add" className="max-w-3xl mx-auto bg-white border border-[#D4AF37]/45 rounded-3xl p-6 sm:p-8 space-y-6 animate-mac-tab shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#D4AF37]/25 pb-4">
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  <span className="p-2 rounded-xl bg-[#D4AF37]/20 text-[#D4AF37]">
+                <h3 className="text-base sm:text-lg font-bold text-neutral-900 flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-[#FAF6EA] text-[#B38728] border border-[#D4AF37]/30">
                     <Plus className="w-5 h-5" />
                   </span>
                   <span>إضافة منتج جديد لمعروضات المتجر</span>
                 </h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  أدخل تفاصيل السلعة، الصور، والقياسات بتنظيم دقيق ومريح لتظهر بشكل احترافي للزبائن.
+                <p className="text-xs text-neutral-600 mt-1">
+                  أدخل تفاصيل السلعة، السعر، الصور، والكمية المتوفرة في المخزون لتظهر للزبائن.
                 </p>
               </div>
             </div>
 
             {formSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-800 text-xs text-emerald-200 flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-400" />
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-800 font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
                 <span>تم نشر وعرض المنتج في المتجر بنجاح!</span>
               </div>
             )}
 
             {imageError && (
-              <div className="p-3 rounded-xl bg-red-950/70 border border-red-800 text-xs text-red-200 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400" />
+              <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-800 font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600" />
                 <span>{imageError}</span>
               </div>
             )}
 
             <form onSubmit={handleAddSubmit} className="space-y-5 text-xs">
-              <div className="bg-[#161620] p-5 rounded-2xl border border-neutral-800 space-y-4">
-                <div className="flex items-center gap-2 text-[#D4AF37] font-bold text-sm border-b border-neutral-800/80 pb-2">
+              <div className="bg-[#FAF8F2] p-5 rounded-2xl border border-[#D4AF37]/30 space-y-4">
+                <div className="flex items-center gap-2 text-[#8B6914] font-bold text-sm border-b border-[#D4AF37]/20 pb-2">
                   <span>1️⃣ معلومات المنتج الأساسية</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-neutral-300 font-medium mb-1.5">
-                      اسم المنتج <span className="text-[#D4AF37]">*</span>
+                    <label className="block text-neutral-700 font-semibold mb-1.5">
+                      اسم المنتج <span className="text-[#B38728]">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="مثال: قميص، حقيبة، جهاز، إلخ..."
+                      placeholder="مثال: ساعة، حقيبة، عطر، جهاز، إلخ..."
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      className="w-full px-3.5 py-3 bg-[#111116] border border-neutral-700 focus:border-[#D4AF37] rounded-xl text-white outline-none"
+                      className="w-full px-3.5 py-3 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-xl text-neutral-900 outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-neutral-300 font-medium mb-1.5">
-                      السعر بالدينار العراقي (د.ع) <span className="text-[#D4AF37]">*</span>
+                    <label className="block text-neutral-700 font-semibold mb-1.5">
+                      السعر بالدينار العراقي (د.ع) <span className="text-[#B38728]">*</span>
                     </label>
                     <input
                       type="number"
@@ -2545,31 +2844,31 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       placeholder="مثال: 25000"
                       value={newPriceIQD}
                       onChange={(e) => setNewPriceIQD(Number(e.target.value))}
-                      className="w-full px-3.5 py-3 bg-[#111116] border border-neutral-700 focus:border-[#D4AF37] rounded-xl text-white outline-none font-mono"
+                      className="w-full px-3.5 py-3 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-xl text-neutral-900 outline-none font-mono"
                     />
-                    <span className="text-[11px] text-[#F3E5AB] mt-1.5 block font-semibold">
+                    <span className="text-[11px] text-[#7A5912] mt-1.5 block font-bold">
                       يظهر للزبون: {formatPrice(newPriceIQD || 0, 'IQD')}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-[#171720] p-4 rounded-xl border border-neutral-800 space-y-3">
+              <div className="bg-neutral-50 p-4 rounded-xl border border-[#D4AF37]/35 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-[#D4AF37]" />
-                    <label className="text-white font-bold text-xs">
+                    <Layers className="w-4 h-4 text-[#B38728]" />
+                    <label className="text-neutral-900 font-bold text-xs">
                       القائمة والقسم التابع لهما هذا المنتج:
                     </label>
                   </div>
-                  <span className="text-[11px] text-[#F3E5AB]">
+                  <span className="text-[11px] text-[#7A5912] font-semibold">
                     (تضيف المنتج للقسم ➔ والقسم مربوط بالقائمة)
                   </span>
                 </div>
 
                 {/* 1. Pick or Link to a List */}
                 <div className="space-y-1.5">
-                  <label className="block text-neutral-300 font-medium text-[11px]">
+                  <label className="block text-neutral-700 font-semibold text-[11px]">
                     1. حدد القائمة التي ترغب بربط المنتج وقسمه بها:
                   </label>
                   {productLists && productLists.length > 0 ? (
@@ -2579,8 +2878,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         onClick={() => setSelectedListIdsForNewProd([])}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                           selectedListIdsForNewProd.length === 0
-                            ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37]'
-                            : 'bg-[#12121A] text-neutral-400 border-neutral-800 hover:text-white'
+                            ? 'gold-gradient-bg text-black border-[#D4AF37] font-bold shadow-xs'
+                            : 'bg-white text-neutral-600 border-[#D4AF37]/30 hover:text-neutral-900'
                         }`}
                       >
                         بدون قائمة محددة (معروضات عامة)
@@ -2596,13 +2895,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
                               isSelected
-                                ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37] shadow-sm'
-                                : 'bg-[#12121A] text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-700'
+                                ? 'gold-gradient-bg text-black border-[#D4AF37] font-bold shadow-sm'
+                                : 'bg-white text-neutral-700 border-[#D4AF37]/30 hover:text-neutral-900 hover:border-[#D4AF37]'
                             }`}
                           >
                             <span>{isSelected ? '✓' : ''}</span>
                             <span>{list.name}</span>
-                            <span className="text-[10px] text-neutral-400 font-mono">
+                            <span className="text-[10px] text-neutral-600 font-mono">
                               ({list.categories?.length || 0} أقسام)
                             </span>
                           </button>
@@ -2610,15 +2909,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       })}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-neutral-400">
+                    <p className="text-[11px] text-neutral-500">
                       لم تقم بإنشاء قوائم بعد. يمكنك كتابة اسم القسم بالأسفل، أو إنشاء قائمة فوراً.
                     </p>
                   )}
                 </div>
 
                 {/* 2. Choose Category or Enter New Category */}
-                <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
-                  <label className="block text-neutral-300 font-medium text-[11px]">
+                <div className="space-y-1.5 pt-2 border-t border-[#D4AF37]/25">
+                  <label className="block text-neutral-700 font-semibold text-[11px]">
                     2. القسم أو التصنيف لهذا المنتج:
                   </label>
 
@@ -2629,7 +2928,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     if (listCats.length > 0) {
                       return (
                         <div className="space-y-1 pb-1">
-                          <span className="text-[10px] text-neutral-400 block">
+                          <span className="text-[10px] text-neutral-500 block">
                             الأقسام المتوفرة في قائمة "{selList?.name}":
                           </span>
                           <div className="flex flex-wrap gap-1.5">
@@ -2641,7 +2940,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                                   newCategory === cat
                                     ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37]'
-                                    : 'bg-[#161622] text-[#F3E5AB] border-neutral-700 hover:border-[#D4AF37]'
+                                    : 'bg-white text-[#7A5912] border-[#D4AF37]/35 hover:border-[#D4AF37]'
                                 }`}
                               >
                                 {cat}
@@ -2657,10 +2956,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   {/* Quick Select from All Store Categories */}
                   {allCategories && allCategories.length > 0 && (
                     <div className="space-y-1 pb-1">
-                      <span className="text-[10px] text-neutral-400 block">
+                      <span className="text-[10px] text-neutral-500 block">
                         أقسام المتجر المتوفرة (انقر للاختيار المباشر):
                       </span>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-[#12121A] rounded-xl border border-neutral-800">
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white rounded-xl border border-[#D4AF37]/30">
                         {allCategories.map((cat) => (
                           <button
                             type="button"
@@ -2669,7 +2968,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             className={`px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                               newCategory === cat
                                 ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37]'
-                                : 'bg-[#181824] text-[#F3E5AB] border-neutral-700 hover:border-[#D4AF37]'
+                                : 'bg-neutral-50 text-[#7A5912] border-[#D4AF37]/35 hover:border-[#D4AF37]'
                             }`}
                           >
                             {cat}
@@ -2685,16 +2984,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       placeholder="أو اكتب اسم قسم جديد (مثال: ساعات، عطور، ملابس، حقائب...)"
                       value={newCategory}
                       onChange={(e) => setNewCategory(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-[#171720] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none"
+                      className="w-full px-3.5 py-2.5 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none"
                     />
                   </div>
-                  <span className="text-[10px] text-neutral-400 block">
+                  <span className="text-[10px] text-neutral-500 block">
                     إذا كتبت اسماً لقسم جديد، سيتم حفظه وربطه تلقائياً بالقائمة المحددة أعلاه.
                   </span>
                 </div>
 
                 {/* Quick Add New List Inline */}
-                <div className="pt-2 border-t border-neutral-800/80">
+                <div className="pt-2 border-t border-[#D4AF37]/25">
                   {isAddingQuickList ? (
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
@@ -2709,7 +3008,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             handleCreateQuickList();
                           }
                         }}
-                        className="flex-1 px-3 py-2 bg-[#12121A] border border-[#D4AF37]/50 focus:border-[#D4AF37] rounded-lg text-white text-xs outline-none"
+                        className="flex-1 px-3 py-2 bg-white border border-[#D4AF37]/50 focus:border-[#D4AF37] rounded-lg text-neutral-900 text-xs outline-none"
                       />
                       <div className="flex gap-2">
                         <button
@@ -2727,7 +3026,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             setIsAddingQuickList(false);
                             setQuickListNameInput('');
                           }}
-                          className="px-3 py-2 bg-[#22222E] hover:bg-[#2C2C3A] text-neutral-300 text-xs rounded-lg transition-colors cursor-pointer"
+                          className="px-3 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-700 text-xs rounded-lg transition-colors cursor-pointer"
                         >
                           إلغاء
                         </button>
@@ -2737,9 +3036,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsAddingQuickList(true)}
-                      className="text-xs text-[#F3E5AB] hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer py-1 font-semibold"
+                      className="text-xs text-[#7A5912] hover:text-neutral-900 flex items-center gap-1.5 transition-colors cursor-pointer py-1 font-bold"
                     >
-                      <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <Plus className="w-3.5 h-3.5 text-[#B38728]" />
                       <span>+ إنشاء قائمة جديدة وربط هذا المنتج وقسمه بها</span>
                     </button>
                   )}
@@ -2747,25 +3046,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
 
               {/* Multi-Image Upload & Management */}
-              <div className="bg-[#171720] p-4 rounded-xl border border-neutral-800 space-y-3">
+              <div className="bg-neutral-50 p-4 rounded-xl border border-[#D4AF37]/35 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-neutral-300 font-medium block">
-                    صور المنتج (يمكنك رفع عدة صور واضحة) <span className="text-[#D4AF37]">*</span>
+                  <label className="text-neutral-900 font-bold block">
+                    صور المنتج (يمكنك رفع عدة صور واضحة) <span className="text-[#B38728]">*</span>
                   </label>
-                  <span className="text-[11px] text-neutral-400">
-                    تمت إضافة: <strong className="text-[#F3E5AB]">{newImages.length}</strong> صور
+                  <span className="text-[11px] text-neutral-600">
+                    تمت إضافة: <strong className="text-[#7A5912]">{newImages.length}</strong> صور
                   </span>
                 </div>
 
                 {/* Upload inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <label className="flex items-center justify-center gap-2 p-3 bg-[#1F1F2B] hover:bg-[#272737] border border-dashed border-[#D4AF37]/50 rounded-xl cursor-pointer transition-all">
+                  <label className="flex items-center justify-center gap-2 p-3 bg-white hover:bg-neutral-100 border border-dashed border-[#D4AF37]/60 rounded-xl cursor-pointer transition-all">
                     {isCompressing ? (
-                      <Loader2 className="w-4 h-4 text-[#D4AF37] animate-spin" />
+                      <Loader2 className="w-4 h-4 text-[#B38728] animate-spin" />
                     ) : (
-                      <Upload className="w-4 h-4 text-[#D4AF37]" />
+                      <Upload className="w-4 h-4 text-[#B38728]" />
                     )}
-                    <span className="text-xs font-semibold text-white">
+                    <span className="text-xs font-bold text-neutral-900">
                       {isCompressing ? 'جاري معالجة وضغط الصور...' : 'رفع صور من جهازك (اختيار عدة صور)'}
                     </span>
                     <input
@@ -2786,12 +3085,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       placeholder="أو الصق رابط صورة https://..."
                       value={imageUrlInput}
                       onChange={(e) => setImageUrlInput(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-[#14141C] border border-neutral-700 rounded-lg text-white text-xs outline-none text-left"
+                      className="flex-1 px-3 py-2 bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 text-xs outline-none text-left"
                     />
                     <button
                       type="button"
                       onClick={handleAddImageUrl}
-                      className="px-3 py-2 bg-[#252535] hover:bg-[#2D2D40] text-[#F3E5AB] rounded-lg text-xs font-bold transition-colors"
+                      className="px-3 py-2 gold-gradient-bg hover:brightness-105 text-black rounded-lg text-xs font-bold transition-colors cursor-pointer"
                     >
                       إضافة
                     </button>
@@ -2800,13 +3099,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                 {/* Thumbnails Gallery of Added Images */}
                 {newImages.length > 0 && (
-                  <div className="pt-2 border-t border-neutral-800 space-y-2">
-                    <span className="text-[11px] text-neutral-400 block">
+                  <div className="pt-2 border-t border-[#D4AF37]/25 space-y-2">
+                    <span className="text-[11px] text-neutral-600 block">
                       الصور المحددة (الصورة الأولى هي الصورة الرئيسية للغلاف):
                     </span>
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
                       {newImages.map((imgUrl, idx) => (
-                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-[#D4AF37]/40 bg-black aspect-square">
+                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-[#D4AF37]/40 bg-white aspect-square">
                           <img
                             src={imgUrl}
                             alt={`صورة ${idx + 1}`}
@@ -2832,165 +3131,349 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 )}
               </div>
 
-              {/* Product Sizes Section (Multi-size options: S, M, L, XL, 38, 40...) */}
-              <div className="bg-[#171720] p-4 rounded-xl border border-neutral-800 space-y-3">
+              {/* Product Stock / Inventory Quantity Section */}
+              <div className="bg-neutral-50 p-4 rounded-xl border border-[#D4AF37]/35 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-[#D4AF37]" />
-                    <label className="text-white font-bold text-xs">
-                      خانات القياسات والأحجام للمنتج (اختياري):
+                    <Package className="w-4 h-4 text-[#B38728]" />
+                    <label className="text-neutral-900 font-bold text-xs">
+                      الكمية المتوفرة في المخزون (عدد القطع): <span className="text-[#B38728]">*</span>
                     </label>
                   </div>
-                  <span className="text-[11px] font-semibold text-[#F3E5AB]">
-                    {newSizes.length > 0 ? `(${newSizes.length} قياسات محددة)` : '(بدون قياسات)'}
+                  <span className="text-[11px] font-bold text-[#7A5912] bg-white border border-[#D4AF37]/40 px-2.5 py-0.5 rounded-full">
+                    {newVariantOptions.length > 0
+                      ? `مجموع مخزون الخانات (${newVariantOptions.reduce((s, v) => s + v.stockCount, 0)} قطعة)`
+                      : newStockCount > 0
+                      ? `متوفر (${newStockCount} قطعة)`
+                      : 'نفذ من المخزون (0)'}
                   </span>
                 </div>
 
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  إذا كان المنتج يتطلب قياسات (تيشيرت، بنطلون، حذاء، فستان...) أضف القياسات المتوفرة لتظهر للزبون ليختار قياسه قبل الطلب. <strong className="text-[#F3E5AB]">إذا لم تضف أي قياسات فلن يظهر أي خيار قياس للزبون نهائياً.</strong>
-                </p>
+                {newVariantOptions.length > 0 ? (
+                  <div className="p-3 rounded-xl bg-white border border-[#D4AF37]/40 text-xs text-[#7A5912] font-bold flex items-center justify-between">
+                    <span>تم تفعيل المخزون المستقل لكل لون/خانة بالأسفل:</span>
+                    <span className="font-mono text-sm text-neutral-900">
+                      الإجمالي: {newVariantOptions.reduce((s, v) => s + v.stockCount, 0)} قطعة
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-neutral-600 leading-relaxed">
+                      حدد عدد القطع المتوفرة من هذه البضاعة (أو أضف خانات/ألوان بالأسفل لتحديد مخزون وصورة لكل لون على حدة).
+                    </p>
 
-                {/* Quick Presets (Clothes & Shoes) */}
-                <div className="space-y-2 pt-1">
-                  {/* Apparel Presets */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] text-neutral-400 ml-1 font-semibold">قياسات ملابس:</span>
-                    {['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', 'Free Size'].map((preset) => {
-                      const isAdded = newSizes.includes(preset);
-                      return (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          key={preset}
-                          onClick={() => handleToggleNewSizePreset(preset)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            isAdded
-                              ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37] shadow-sm'
-                              : 'bg-[#12121A] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
-                          }`}
+                          onClick={() => setNewStockCount((prev) => Math.max(0, (Number(prev) || 0) - 1))}
+                          className="w-9 h-9 rounded-xl bg-white hover:bg-neutral-100 border border-[#D4AF37]/40 text-neutral-900 font-bold text-base flex items-center justify-center cursor-pointer"
                         >
-                          {isAdded ? `✓ ${preset}` : `+ ${preset}`}
+                          -
                         </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Footwear Presets */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[10px] text-neutral-400 ml-1 font-semibold">نمر أحذية:</span>
-                    {['38', '39', '40', '41', '42', '43', '44', '45'].map((preset) => {
-                      const isAdded = newSizes.includes(preset);
-                      return (
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          step={1}
+                          value={newStockCount}
+                          onChange={(e) => setNewStockCount(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                          className="w-28 px-3 py-2 text-center bg-white border border-[#D4AF37]/45 focus:border-[#D4AF37] rounded-xl text-neutral-900 font-mono font-bold text-sm outline-none"
+                        />
                         <button
                           type="button"
-                          key={preset}
-                          onClick={() => handleToggleNewSizePreset(preset)}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            isAdded
-                              ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37] shadow-sm'
-                              : 'bg-[#12121A] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
-                          }`}
+                          onClick={() => setNewStockCount((prev) => (Number(prev) || 0) + 1)}
+                          className="w-9 h-9 rounded-xl bg-white hover:bg-neutral-100 border border-[#D4AF37]/40 text-[#7A5912] font-bold text-base flex items-center justify-center cursor-pointer"
                         >
-                          {isAdded ? `✓ ${preset}` : `+ ${preset}`}
+                          +
                         </button>
-                      );
-                    })}
+                      </div>
+
+                      {/* Quick Stock Presets */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-neutral-500 ml-1 font-semibold">تحديد سريع:</span>
+                        {[1, 3, 5, 10, 20, 50, 100].map((presetQty) => (
+                          <button
+                            type="button"
+                            key={presetQty}
+                            onClick={() => setNewStockCount(presetQty)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer font-mono ${
+                              newStockCount === presetQty
+                                ? 'gold-gradient-bg text-black border-[#D4AF37] shadow-sm'
+                                : 'bg-white text-neutral-700 border-[#D4AF37]/30 hover:border-[#D4AF37]'
+                            }`}
+                          >
+                            {presetQty} قطعة
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Custom Product Options / Fields with Per-Option Stock & Linked Image */}
+              <div className="bg-neutral-50 p-4 rounded-xl border border-[#D4AF37]/45 space-y-3.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-[#B38728]" />
+                    <label className="text-neutral-900 font-bold text-xs">
+                      خانات أو ألوان المنتج مع مخزون وصورة خاصة لكل خانة (اختياري):
+                    </label>
                   </div>
+                  <span className="text-[10px] font-bold text-[#7A5912] bg-white border border-[#D4AF37]/35 px-2.5 py-0.5 rounded-full">
+                    {newVariantOptions.length > 0
+                      ? `تم تحديد ${newVariantOptions.length} خانات (إجمالي ${newVariantOptions.reduce((s, v) => s + v.stockCount, 0)} قطعة)`
+                      : 'اختياري (إذا تركتها فارغة لن تظهر أي خانات للزبون)'}
+                  </span>
                 </div>
 
-                {/* Custom size input */}
-                <div className="pt-2 border-t border-neutral-800/80">
-                  <div className="flex gap-2">
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  أضف الألوان أو الأقسام (مثل: <strong>أسود، بنفسجي، أبيض</strong>)، وحدد <strong>عدد المخزون</strong> و<strong>الصورة المخصصة</strong> لكل لون. عندما يضغط الزبون على اللون ستظهر له صورته ومخزونه فوراً!
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                  <div className="sm:col-span-4">
+                    <label className="block text-[11px] text-neutral-700 font-semibold mb-1">
+                      عنوان الخانة (يظهر للزبون):
+                    </label>
                     <input
                       type="text"
-                      placeholder="أو اكتب قياساً مخصصاً (مثال: Oversize أو 52 أو كبير أو وسط)..."
-                      value={newSizeInput}
-                      onChange={(e) => setNewSizeInput(e.target.value)}
+                      placeholder="مثال: اللون المطلوب / النوع"
+                      value={newCustomOptionLabel}
+                      onChange={(e) => setNewCustomOptionLabel(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 text-xs outline-none"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-5">
+                    <label className="block text-[11px] text-neutral-700 font-semibold mb-1">
+                      اسم اللون أو الخانة:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="مثال: أسود، بنفسجي، أزرق..."
+                      value={newOptionInput}
+                      onChange={(e) => setNewOptionInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleAddNewSize();
+                          handleAddNewOptionItems(newOptionInput);
                         }
                       }}
-                      className="flex-1 px-3 py-2 bg-[#12121A] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white text-xs outline-none"
+                      className="w-full px-3 py-2 bg-white border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 text-xs outline-none"
                     />
+                  </div>
+
+                  <div className="sm:col-span-3 flex gap-1.5 items-end">
+                    <div className="w-20">
+                      <label className="block text-[10px] text-neutral-700 font-semibold mb-1">
+                        المخزون:
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newOptionStockInput}
+                        onChange={(e) => setNewOptionStockInput(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                        className="w-full px-2 py-2 text-center bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 font-mono font-bold text-xs outline-none"
+                      />
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handleAddNewSize()}
-                      className="px-3.5 py-2 bg-[#252535] hover:bg-[#D4AF37] hover:text-black text-[#F3E5AB] rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      onClick={() => handleAddNewOptionItems(newOptionInput)}
+                      className="flex-1 py-2 px-3 gold-gradient-bg text-black font-bold rounded-lg text-xs hover:brightness-105 cursor-pointer flex items-center justify-center gap-1 h-[34px]"
                     >
-                      + إضافة خانة قياس
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Selected Sizes Chips Preview */}
-                {newSizes.length > 0 ? (
-                  <div className="pt-2 border-t border-neutral-800/80 space-y-2">
+                {newVariantOptions.length > 0 && (
+                  <div className="pt-3 border-t border-[#D4AF37]/25 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-neutral-300 font-medium">
-                        القياسات المضافة التي ستظهر للزبون عند طلب هذا المنتج:
+                      <span className="text-[11px] text-neutral-800 font-bold">
+                        الخانات المضافة (حدد مخزون وصورة كل خانة):
                       </span>
                       <button
                         type="button"
-                        onClick={() => setNewSizes([])}
-                        className="text-[10px] text-red-400 hover:underline cursor-pointer"
+                        onClick={() => setNewVariantOptions([])}
+                        className="text-[10px] text-red-600 hover:underline font-bold cursor-pointer"
                       >
-                        مسح كافة القياسات
+                        مسح جميع الخانات
                       </button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {newSizes.map((sz) => (
-                        <span
-                          key={sz}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#222230] text-[#F3E5AB] border border-[#D4AF37]/50 text-xs font-bold shadow-sm"
+                    <div className="space-y-2.5">
+                      {newVariantOptions.map((opt, idx) => (
+                        <div
+                          key={opt.name}
+                          className="p-3 rounded-xl bg-white border border-[#D4AF37]/45 shadow-2xs space-y-2.5"
                         >
-                          <span>{sz}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveNewSize(sz)}
-                            className="text-neutral-400 hover:text-red-400 p-0.5 rounded cursor-pointer transition-colors"
-                            title="حذف هذا القياس"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </span>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            {/* Option Image Preview & Name */}
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-12 h-12 rounded-lg border border-[#D4AF37]/40 bg-[#FAF8F2] flex items-center justify-center overflow-hidden shrink-0 p-1">
+                                {opt.image ? (
+                                  <img src={opt.image} alt={opt.name} className="w-full h-full object-contain" />
+                                ) : (
+                                  <ImageIcon className="w-5 h-5 text-neutral-400" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-xs font-extrabold text-neutral-900 flex items-center gap-1.5">
+                                  <span>{opt.name}</span>
+                                  {opt.image ? (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                                      مرتبط بصورة ✓
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                                      بدون صورة مخصصة
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-neutral-500 block mt-0.5">
+                                  عند ضغط الزبون على "{opt.name}" ستظهر له الصورة المحددة هنا
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stock Controls & Delete for this Option */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-[#FAF7EF] px-2 py-1 rounded-lg border border-[#D4AF37]/35">
+                                <span className="text-[10px] font-bold text-[#7A5912] ml-1">المخزون:</span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setNewVariantOptions((prev) =>
+                                      prev.map((item, i) =>
+                                        i === idx ? { ...item, stockCount: Math.max(0, item.stockCount - 1) } : item
+                                      )
+                                    )
+                                  }
+                                  className="w-6 h-6 rounded bg-white border border-[#D4AF37]/40 text-neutral-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={opt.stockCount}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                                    setNewVariantOptions((prev) =>
+                                      prev.map((item, i) => (i === idx ? { ...item, stockCount: val } : item))
+                                    );
+                                  }}
+                                  className="w-12 h-6 text-center bg-white border border-[#D4AF37]/40 rounded font-mono font-bold text-xs text-neutral-900 outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setNewVariantOptions((prev) =>
+                                      prev.map((item, i) =>
+                                        i === idx ? { ...item, stockCount: item.stockCount + 1 } : item
+                                      )
+                                    )
+                                  }
+                                  className="w-6 h-6 rounded bg-white border border-[#D4AF37]/40 text-[#7A5912] font-bold text-xs flex items-center justify-center cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setNewVariantOptions((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                                className="p-1.5 rounded-lg bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 transition-colors cursor-pointer"
+                                title="حذف هذه الخانة"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Link Image Bar: Upload directly OR pick from uploaded product images */}
+                          <div className="pt-2 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <label className="px-2.5 py-1 rounded-lg bg-[#FAF7EF] hover:bg-[#FAF4E1] border border-[#D4AF37]/45 text-[#7A5912] font-bold text-[11px] cursor-pointer flex items-center gap-1.5 transition-colors">
+                                <Upload className="w-3 h-3 text-[#B38728]" />
+                                <span>رفع صورة خاصة لـ ({opt.name})</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleUploadNewVariantImage(opt.name, e)}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {newImages.length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] text-neutral-500 font-semibold">
+                                    أو اختر من صور المنتج المرفوعة:
+                                  </span>
+                                  {newImages.map((imgUrl, imgIdx) => {
+                                    const isLinked = opt.image === imgUrl;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={imgIdx}
+                                        onClick={() =>
+                                          setNewVariantOptions((prev) =>
+                                            prev.map((item, i) =>
+                                              i === idx ? { ...item, image: imgUrl } : item
+                                            )
+                                          )
+                                        }
+                                        className={`w-8 h-8 rounded-lg overflow-hidden border-2 transition-all cursor-pointer p-0.5 bg-white ${
+                                          isLinked
+                                            ? 'border-[#D4AF37] ring-2 ring-[#D4AF37]/40 scale-105'
+                                            : 'border-neutral-200 opacity-70 hover:opacity-100'
+                                        }`}
+                                        title={`ربط الصورة ${imgIdx + 1} بالخيار ${opt.name}`}
+                                      >
+                                        <img src={imgUrl} alt="" className="w-full h-full object-contain" />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 rounded-lg bg-[#121218] border border-dashed border-neutral-800 text-center">
-                    <span className="text-[11px] text-neutral-400">
-                      لم تضف قياسات لهذا المنتج (لن يظهر أي خيار قياس للزبون، وسيتمكن من طلب المنتج مباشرة بدون قياسات).
-                    </span>
                   </div>
                 )}
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-neutral-300 font-medium mb-1.5">
+                <label className="block text-neutral-700 font-bold mb-1.5">
                   وصف ومواصفات المنتج للزبائن
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="اكتب مواصفات المنتج، الألوان، المقاسات، أو مميزات الخامة..."
+                  placeholder="اكتب مواصفات المنتج، الألوان، أو مميزات الخامة..."
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#171720] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white outline-none resize-none"
+                  className="w-full px-3.5 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 focus:border-[#D4AF37] rounded-lg text-neutral-900 outline-none resize-none"
                 />
               </div>
 
               {/* Featured in Marquee Strip Checkbox */}
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-[#171720] border border-neutral-700 hover:border-[#D4AF37]/60 cursor-pointer transition-all">
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-[#D4AF37]/35 hover:border-[#D4AF37] cursor-pointer transition-all">
                 <input
                   type="checkbox"
                   checked={newIsFeaturedInStrip}
                   onChange={(e) => setNewIsFeaturedInStrip(e.target.checked)}
                   className="w-4 h-4 accent-[#D4AF37] rounded cursor-pointer"
                 />
-                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                <span className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#B38728]" />
                   <span>عرض هذا المنتج في الشريط المتحرك التفاعلي بالصفحة الرئيسية</span>
                 </span>
               </label>
@@ -2998,7 +3481,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <button
                 type="submit"
                 disabled={isCompressing}
-                className="w-full py-3.5 font-bold text-black gold-gradient-bg rounded-xl hover:brightness-110 shadow-lg flex items-center justify-center gap-2 transition-all"
+                className="w-full py-3.5 font-bold text-black gold-gradient-bg rounded-xl hover:brightness-110 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4 fill-black" />
                 <span>نشر وعرض المنتج في المتجر الآن</span>
@@ -3028,39 +3511,39 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <div key="tab-accounts" className="space-y-5 text-right animate-mac-tab">
             {/* Top Overview Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <div className="bg-[#121218] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border border-[#D4AF37]/35 p-4 rounded-xl flex items-center justify-between shadow-xs">
                 <div>
-                  <span className="text-[11px] text-neutral-400 block mb-1">إجمالي الحسابات المسجلة</span>
-                  <span className="text-2xl font-bold text-white font-mono">{registeredUsers.length}</span>
+                  <span className="text-[11px] text-neutral-500 font-semibold block mb-1">إجمالي الحسابات المسجلة</span>
+                  <span className="text-2xl font-bold text-neutral-900 font-mono">{registeredUsers.length}</span>
                 </div>
-                <div className="w-10 h-10 rounded-lg bg-[#181824] border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37]">
+                <div className="w-10 h-10 rounded-lg bg-neutral-50 border border-[#D4AF37]/35 flex items-center justify-center text-[#B38728]">
                   <Users className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="bg-[#121218] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border border-emerald-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
                 <div>
-                  <span className="text-[11px] text-neutral-400 block mb-1">حسابات نشطة ومتاحة للشراء</span>
-                  <span className="text-2xl font-bold text-emerald-400 font-mono">{activeUsersList.length}</span>
+                  <span className="text-[11px] text-neutral-500 font-semibold block mb-1">حسابات نشطة ومتاحة للشراء</span>
+                  <span className="text-2xl font-bold text-emerald-600 font-mono">{activeUsersList.length}</span>
                 </div>
-                <div className="w-10 h-10 rounded-lg bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+                <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                   <UserCheck className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="bg-[#121218] border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border border-red-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
                 <div>
-                  <span className="text-[11px] text-neutral-400 block mb-1">حسابات محظورة من الطلب</span>
-                  <span className="text-2xl font-bold text-red-400 font-mono">{blockedUsersList.length}</span>
+                  <span className="text-[11px] text-neutral-500 font-semibold block mb-1">حسابات محظورة من الطلب</span>
+                  <span className="text-2xl font-bold text-red-600 font-mono">{blockedUsersList.length}</span>
                 </div>
-                <div className="w-10 h-10 rounded-lg bg-red-950/40 border border-red-800/40 flex items-center justify-center text-red-400">
+                <div className="w-10 h-10 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-600">
                   <Ban className="w-5 h-5" />
                 </div>
               </div>
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="bg-[#111116] border border-neutral-800 rounded-2xl p-4 space-y-3">
+            <div className="bg-white border border-[#D4AF37]/35 rounded-2xl p-4 space-y-3 shadow-xs">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 {/* Search in customers */}
                 <div className="relative flex-1 max-w-md">
@@ -3069,13 +3552,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     placeholder="ابحث بالاسم، أو رقم الهاتف، أو البريد الإلكتروني..."
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="w-full pr-9 pl-4 py-2 bg-[#171722] border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 outline-none focus:border-[#D4AF37]"
+                    className="w-full pr-9 pl-4 py-2 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 outline-none focus:border-[#D4AF37]"
                   />
-                  <Search className="w-4 h-4 text-neutral-400 absolute right-3 top-2.5 pointer-events-none" />
+                  <Search className="w-4 h-4 text-[#B38728] absolute right-3 top-2.5 pointer-events-none" />
                   {userSearchTerm && (
                     <button
                       onClick={() => setUserSearchTerm('')}
-                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-white"
+                      className="absolute left-3 top-2.5 text-neutral-400 hover:text-neutral-900"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -3083,14 +3566,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </div>
 
                 {/* Sub-tabs: All / Active / Blocked */}
-                <div className="flex items-center gap-1 bg-[#171722] p-1 rounded-xl border border-neutral-800 self-start sm:self-auto">
+                <div className="flex items-center gap-1 bg-neutral-50 p-1 rounded-xl border border-[#D4AF37]/25 self-start sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setUserFilterTab('all')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       userFilterTab === 'all'
-                        ? 'bg-[#282838] text-white shadow-sm'
-                        : 'text-neutral-400 hover:text-white'
+                        ? 'gold-gradient-bg text-black shadow-xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
                     }`}
                   >
                     الكل ({registeredUsers.length})
@@ -3100,8 +3583,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     onClick={() => setUserFilterTab('active')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       userFilterTab === 'active'
-                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
-                        : 'text-neutral-400 hover:text-white'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-neutral-600 hover:text-emerald-700'
                     }`}
                   >
                     النشطة ({activeUsersList.length})
@@ -3111,8 +3594,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     onClick={() => setUserFilterTab('blocked')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       userFilterTab === 'blocked'
-                        ? 'bg-red-950/80 text-red-300 border border-red-700/50'
-                        : 'text-neutral-400 hover:text-white'
+                        ? 'bg-red-600 text-white shadow-xs'
+                        : 'text-neutral-600 hover:text-red-700'
                     }`}
                   >
                     المحظورين ({blockedUsersList.length})
@@ -3123,10 +3606,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Users List */}
             {filteredUsers.length === 0 ? (
-              <div className="py-14 text-center space-y-3 bg-[#111116] border border-neutral-800 rounded-2xl">
-                <Users className="w-12 h-12 text-neutral-600 mx-auto" />
-                <h4 className="text-base font-bold text-white">لا توجد حسابات مطابقة للبحث</h4>
-                <p className="text-xs text-neutral-400">
+              <div className="py-14 text-center space-y-3 bg-white border border-[#D4AF37]/30 rounded-2xl shadow-xs">
+                <Users className="w-12 h-12 text-[#B38728] mx-auto" />
+                <h4 className="text-base font-bold text-neutral-900">لا توجد حسابات مطابقة للبحث</h4>
+                <p className="text-xs text-neutral-500">
                   {userFilterTab === 'blocked' 
                     ? 'لا توجد أي حسابات محظورة حالياً في المتجر. كافة الزبائن لديهم صلاحية الشراء والطلب.' 
                     : 'لم يتم العثور على حسابات مسجلة بهذه البيانات.'}
@@ -3142,10 +3625,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   return (
                     <div
                       key={usr.id}
-                      className={`bg-[#121218] rounded-2xl border p-4 sm:p-5 space-y-3.5 transition-all ${
+                      className={`bg-white rounded-2xl border p-4 sm:p-5 space-y-3.5 transition-all shadow-xs ${
                         usr.isBlocked
-                          ? 'border-red-600/50 bg-red-950/10 shadow-[0_0_15px_rgba(220,38,38,0.1)]'
-                          : 'border-neutral-800 hover:border-neutral-700'
+                          ? 'border-red-400 bg-red-50/30'
+                          : 'border-[#D4AF37]/35 hover:border-[#D4AF37]'
                       }`}
                     >
                       {/* Customer Card Header */}
@@ -3153,62 +3636,62 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         <div className="flex items-center gap-3">
                           <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm ${
                             usr.isBlocked
-                              ? 'bg-red-950/70 border border-red-700 text-red-300'
-                              : 'bg-[#1D1D28] border border-[#D4AF37]/40 text-[#F3E5AB]'
+                              ? 'bg-red-100 border border-red-300 text-red-700'
+                              : 'bg-neutral-50 border border-[#D4AF37]/45 text-[#7A5912]'
                           }`}>
                             {usr.name ? usr.name.slice(0, 2).toUpperCase() : 'LC'}
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
                               <span>{usr.name}</span>
                               {usr.isBlocked && (
-                                <span className="px-2 py-0.5 text-[10px] font-bold text-red-400 bg-red-950/80 border border-red-800 rounded-full flex items-center gap-1">
+                                <span className="px-2 py-0.5 text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 rounded-full flex items-center gap-1">
                                   <Ban className="w-3 h-3" />
                                   <span>محظور</span>
                                 </span>
                               )}
                             </h4>
-                            <span className="text-[11px] text-neutral-400 block font-mono dir-ltr text-right">
+                            <span className="text-[11px] text-neutral-500 block font-mono dir-ltr text-right">
                               انضم: {formatDateTime(usr.createdAt)}
                             </span>
                           </div>
                         </div>
 
-                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#181822] text-neutral-300 border border-neutral-800 font-mono">
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-neutral-50 text-[#7A5912] border border-[#D4AF37]/30 font-mono">
                           {customerOrdersCount} {customerOrdersCount === 1 ? 'طلب' : 'طلبات'}
                         </span>
                       </div>
 
                       {/* Customer Info Box */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-[#171722] p-3 rounded-xl border border-neutral-800/80">
-                        <div className="flex items-center gap-2 text-neutral-300">
-                          <Phone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                          <span className="font-mono dir-ltr font-medium text-white">{usr.phone}</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-neutral-50 p-3 rounded-xl border border-[#D4AF37]/25">
+                        <div className="flex items-center gap-2 text-neutral-700">
+                          <Phone className="w-3.5 h-3.5 text-[#B38728] shrink-0" />
+                          <span className="font-mono dir-ltr font-bold text-neutral-900">{usr.phone}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-neutral-300 truncate">
-                          <Mail className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                          <span className="font-mono dir-ltr truncate text-neutral-300" title={usr.email}>{usr.email}</span>
+                        <div className="flex items-center gap-2 text-neutral-700 truncate">
+                          <Mail className="w-3.5 h-3.5 text-[#B38728] shrink-0" />
+                          <span className="font-mono dir-ltr truncate text-neutral-700" title={usr.email}>{usr.email}</span>
                         </div>
                       </div>
 
                       {/* Block Reason Note if blocked */}
                       {usr.isBlocked && usr.blockReason && (
-                        <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-800/70 text-red-200 text-xs flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="font-bold block text-[11px] text-red-300">سبب الحظر:</span>
+                            <span className="font-bold block text-[11px] text-red-700">سبب الحظر:</span>
                             <span className="text-xs">{usr.blockReason}</span>
                           </div>
                         </div>
                       )}
 
                       {/* Action Buttons */}
-                      <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between gap-2">
+                      <div className="pt-2 border-t border-[#D4AF37]/20 flex items-center justify-between gap-2">
                         {usr.isBlocked ? (
                           <button
                             type="button"
                             onClick={() => handleUnblockUser(usr)}
-                            className="flex-1 py-2 px-3 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-600 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex-1 py-2 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-400 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <UserCheck className="w-4 h-4" />
                             <span>فك الحظر واستعادة الحساب</span>
@@ -3220,7 +3703,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               setBlockingUser(usr);
                               setBlockReasonInput('عدم الجدية وتكرار إلغاء الطلبات عند التسليم');
                             }}
-                            className="flex-1 py-2 px-3 rounded-lg bg-red-950/50 hover:bg-red-950 text-red-300 border border-red-800/80 hover:border-red-600 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex-1 py-2 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 hover:border-red-500 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <Ban className="w-4 h-4" />
                             <span>حظر هذا الحساب من الطلب</span>
@@ -3234,10 +3717,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             if (!usr || !usr.id) return;
                             setUserToDelete(usr);
                           }}
-                          className="py-2 px-3 rounded-lg bg-red-950/40 hover:bg-red-900 text-red-300 hover:text-white border border-red-800/70 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                          className="py-2 px-3 rounded-lg bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                           title="حذف هذا الحساب نهائياً"
                         >
-                          <Trash2 className="w-4 h-4 text-red-400" />
+                          <Trash2 className="w-4 h-4" />
                           <span>حذف الحساب</span>
                         </button>
                       </div>
@@ -3254,15 +3737,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <div key="tab-staff" className="space-y-6 animate-mac-tab text-right">
             
             {/* Header with Title and Add Button */}
-            <div className="bg-[#111116] border border-neutral-800 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="bg-white border border-[#D4AF37]/35 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white">فريق إدارة وموظفي متجر LC</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#D4AF37]/20 text-[#F3E5AB] border border-[#D4AF37]/40">
+                  <h2 className="text-lg font-bold text-neutral-900">فريق إدارة وموظفي متجر LC</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-50 text-[#7A5912] border border-[#D4AF37]/40">
                     {staffMembers.length} موظف ومدير
                   </span>
                 </div>
-                <p className="text-xs text-neutral-400 leading-relaxed">
+                <p className="text-xs text-neutral-600 leading-relaxed">
                   يمكنك تغيير الرمز السري لحسابك بشرط إدخال الرمز القديم. كما يمكن للمدير العام إضافة موظفين، وتعديل رموزهم، وحذف حساباتهم.
                 </p>
               </div>
@@ -3277,9 +3760,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     setSelfPinError(null);
                     setIsSelfChangePinOpen(true);
                   }}
-                  className="py-2.5 px-4 rounded-xl bg-[#1C1C28] hover:bg-[#252538] border border-[#D4AF37]/60 text-[#F3E5AB] font-bold text-xs active:scale-95 transition-all shadow-md flex items-center gap-2 cursor-pointer shrink-0"
+                  className="py-2.5 px-4 rounded-xl bg-neutral-50 hover:bg-neutral-100 border border-[#D4AF37]/60 text-[#7A5912] font-bold text-xs active:scale-95 transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
                 >
-                  <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+                  <KeyRound className="w-4 h-4 text-[#B38728]" />
                   <span>تغيير رمز حسابي الحالي 🔑</span>
                 </button>
 
@@ -3303,18 +3786,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Active Session & Device Push Notifications Info Box */}
-            <div className="bg-gradient-to-r from-[#17140B] via-[#221C11] to-[#17140B] border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="bg-white border border-[#D4AF37]/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
               <div className="space-y-1 text-right">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ShieldCheck className="w-5 h-5 text-[#D4AF37]" />
-                  <span className="text-sm font-bold text-white">
-                    أنت مسجل حالياً باسم: <span className="text-[#F3E5AB] font-mono">{currentStaffSession?.name || 'المدير العام'}</span>
+                  <ShieldCheck className="w-5 h-5 text-[#B38728]" />
+                  <span className="text-sm font-bold text-neutral-900">
+                    أنت مسجل حالياً باسم: <span className="text-[#7A5912] font-mono">{currentStaffSession?.name || 'المدير العام'}</span>
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-bold">
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold">
                     جلسة نشطة ومحفوظة ✓
                   </span>
                 </div>
-                <p className="text-xs text-neutral-300 leading-relaxed">
+                <p className="text-xs text-neutral-600 leading-relaxed">
                   الجلسة محفوظة دائماً على هذا الجهاز. يمكنك تغيير رمز المرور السري الخاص بحسابك في أي وقت بالضغط على الزر بالأعلى.
                 </p>
               </div>
@@ -3329,9 +3812,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     setSelfPinError(null);
                     setIsSelfChangePinOpen(true);
                   }}
-                  className="px-3.5 py-2 bg-[#1A1A28] border border-[#D4AF37]/60 text-[#F3E5AB] hover:bg-[#252538] active:scale-95 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                  className="px-3.5 py-2 bg-neutral-50 border border-[#D4AF37]/60 text-[#7A5912] hover:bg-neutral-100 active:scale-95 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
                 >
-                  <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+                  <KeyRound className="w-4 h-4 text-[#B38728]" />
                   <span>تغيير رمزي السري</span>
                 </button>
 
@@ -3349,9 +3832,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       alert('يرجى السماح بالإشعارات من إعدادات المتصفح');
                     }
                   }}
-                  className="px-3.5 py-2 bg-[#111118] border border-neutral-700 text-neutral-300 hover:text-white active:scale-95 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                  className="px-3.5 py-2 bg-white border border-[#D4AF37]/40 text-neutral-700 hover:text-neutral-900 active:scale-95 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
                 >
-                  <Smartphone className="w-4 h-4 text-[#D4AF37]" />
+                  <Smartphone className="w-4 h-4 text-[#B38728]" />
                   <span>اختبار رنة الإشعار</span>
                 </button>
               </div>
@@ -3368,27 +3851,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 return (
                   <div
                     key={member.id}
-                    className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 ${
+                    className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 bg-white ${
                       isCurrent
-                        ? 'bg-gradient-to-b from-[#181826] to-[#101016] border-[#D4AF37] shadow-[0_0_30px_rgba(212,175,55,0.2)]'
-                        : 'bg-[#111116] border-neutral-800 hover:border-neutral-700 shadow-md'
+                        ? 'border-2 border-[#D4AF37] shadow-md'
+                        : 'border-[#D4AF37]/35 hover:border-[#D4AF37] shadow-xs'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-[#1A1A26] border border-[#D4AF37]/50 flex items-center justify-center text-lg font-bold text-[#F3E5AB] shadow-md shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-neutral-50 border border-[#D4AF37]/50 flex items-center justify-center text-lg font-bold text-[#7A5912] shadow-xs shrink-0">
                           {member.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-white">{member.name}</h3>
+                            <h3 className="text-sm font-bold text-neutral-900">{member.name}</h3>
                             {isCurrent && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4AF37] text-black font-extrabold shadow-sm">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4AF37] text-black font-extrabold shadow-xs">
                                 أنت
                               </span>
                             )}
                           </div>
-                          <span className="text-[11px] text-[#D4AF37] font-semibold">
+                          <span className="text-[11px] text-[#7A5912] font-bold">
                             {member.role === 'admin' ? 'مدير عام (صلاحيات كاملة)' : 'مشرف إدارة ومبيعات'}
                           </span>
                         </div>
@@ -3408,9 +3891,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               setIsSelfChangePinOpen(true);
                             }}
                             title="تغيير الرمز السري لحسابي"
-                            className="px-2.5 py-1.5 rounded-xl bg-[#1C1C28] hover:bg-[#28283A] border border-[#D4AF37]/50 text-[#F3E5AB] text-xs font-bold transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
+                            className="px-2.5 py-1.5 rounded-xl bg-neutral-50 hover:bg-neutral-100 border border-[#D4AF37]/50 text-[#7A5912] text-xs font-bold transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-xs"
                           >
-                            <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
+                            <KeyRound className="w-3.5 h-3.5 text-[#B38728]" />
                             <span>تغيير رمزي</span>
                           </button>
                         )}
@@ -3427,16 +3910,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 setAdminResetPinError(null);
                               }}
                               title="تغيير وإعادة تعيين رمز هذا الموظف"
-                              className="p-2 rounded-xl bg-neutral-900 hover:bg-[#222232] border border-neutral-700 hover:border-[#D4AF37]/50 text-neutral-300 hover:text-[#F3E5AB] transition-all cursor-pointer active:scale-95 shadow-sm"
+                              className="p-2 rounded-xl bg-neutral-50 hover:bg-neutral-100 border border-[#D4AF37]/40 hover:border-[#D4AF37] text-[#7A5912] transition-all cursor-pointer active:scale-95 shadow-xs"
                             >
-                              <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+                              <KeyRound className="w-4 h-4 text-[#B38728]" />
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setStaffToDelete(member)}
                               title="حذف هذا الموظف"
-                              className="p-2 rounded-xl bg-neutral-900/80 border border-neutral-800 text-neutral-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-950/30 transition-all cursor-pointer active:scale-95"
+                              className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-600 hover:text-white transition-all cursor-pointer active:scale-95"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -3445,17 +3928,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-neutral-800/80 text-[11px] text-neutral-400 space-y-1">
+                    <div className="pt-3 border-t border-[#D4AF37]/20 text-[11px] text-neutral-500 space-y-1">
                       <div className="flex items-center justify-between">
                         <span>تاريخ الإضافة:</span>
-                        <span className="text-neutral-300 font-mono">
+                        <span className="text-neutral-800 font-mono font-semibold">
                           {new Date(member.createdAt).toLocaleDateString('ar-IQ')}
                         </span>
                       </div>
                       {member.lastLoginAt && (
                         <div className="flex items-center justify-between">
                           <span>آخر تسجيل دخول:</span>
-                          <span className="text-neutral-300 font-mono">
+                          <span className="text-neutral-800 font-mono font-semibold">
                             {new Date(member.lastLoginAt).toLocaleDateString('ar-IQ')} {new Date(member.lastLoginAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
@@ -3472,23 +3955,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       </div>
 
       {/* Modal: Add New Staff Member */}
-      {isAddStaffModalOpen && (
+      {isAddStaffModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
           onClick={() => setIsAddStaffModalOpen(false)}
         >
           <div 
-            className="w-full max-w-md bg-[#111116] border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
+            className="w-full max-w-md bg-white border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-[#D4AF37]" />
+            <div className="flex items-center justify-between pb-3 border-b border-[#D4AF37]/25">
+              <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-[#B38728]" />
                 <span>إضافة مدير أو موظف جديد للإدارة</span>
               </h3>
               <button
                 onClick={() => setIsAddStaffModalOpen(false)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white cursor-pointer"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3496,8 +3979,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             <form onSubmit={handleAddNewStaff} className="space-y-3.5 text-xs text-right">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  اسم الموظف / المدير <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  اسم الموظف / المدير <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type="text"
@@ -3505,13 +3988,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="مثال: أحمد حميد"
                   value={newStaffName}
                   onChange={(e) => setNewStaffName(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37]"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37]"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  الرمز السري للدخول (PIN) <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  الرمز السري للدخول (PIN) <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type="password"
@@ -3520,13 +4003,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أدخل رمز سري من 4 أرقام أو حروف"
                   value={newStaffPin}
                   onChange={(e) => setNewStaffPin(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  تأكيد الرمز السري <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  تأكيد الرمز السري <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type="password"
@@ -3535,18 +4018,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أعد كتابة الرمز للتأكيد"
                   value={newStaffConfirmPin}
                   onChange={(e) => setNewStaffConfirmPin(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
+                <label className="block text-neutral-700 font-bold mb-1">
                   نوع الصلاحية
                 </label>
                 <select
                   value={newStaffRole}
                   onChange={(e) => setNewStaffRole(e.target.value as 'admin' | 'manager')}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37]"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37]"
                 >
                   <option value="manager">مشرف مبيعات وتجهيز طلبات</option>
                   <option value="admin">مدير عام (كامل الصلاحيات)</option>
@@ -3557,7 +4040,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddStaffModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-700 hover:text-neutral-900 cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -3571,28 +4054,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Confirm Delete Staff Member */}
-      {staffToDelete && (
+      {staffToDelete && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setStaffToDelete(null)}
         >
           <div 
-            className="w-full max-w-md bg-[#111116] border border-red-500/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl animate-ios-fade-in"
+            className="w-full max-w-md bg-white border border-red-400 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 rounded-2xl bg-red-950/60 border border-red-500 flex items-center justify-center text-red-400 mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-300 flex items-center justify-center text-red-600 mx-auto">
               <UserMinus className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-1.5">
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-neutral-900">
                 تأكيد حذف حساب الموظف ({staffToDelete.name})
               </h3>
-              <p className="text-xs text-neutral-300 leading-relaxed">
+              <p className="text-xs text-neutral-600 leading-relaxed">
                 هل أنت متأكد من رغبتك في حذف هذا الحساب؟ سيتم إلغاء صلاحياته فوراً وإخراجه من لوحة التحكم، ولن يتمكن من الدخول مجدداً إلا بعد إنشاء حساب جديد له.
               </p>
             </div>
@@ -3601,7 +4085,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <button
                 type="button"
                 onClick={() => setStaffToDelete(null)}
-                className="px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-700 hover:text-neutral-900 text-xs font-semibold cursor-pointer"
               >
                 تراجع
               </button>
@@ -3615,47 +4099,48 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Employee Self Change PIN (Requires Old PIN) */}
-      {isSelfChangePinOpen && (
+      {isSelfChangePinOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
           onClick={() => setIsSelfChangePinOpen(false)}
         >
           <div 
-            className="w-full max-w-md bg-[#111116] border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl animate-ios-fade-in"
+            className="w-full max-w-md bg-white border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+            <div className="flex items-center justify-between pb-3 border-b border-[#D4AF37]/25">
+              <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#B38728]" />
                 <span>تغيير الرمز السري لحسابي ({currentStaffSession?.name || 'المدير'})</span>
               </h3>
               <button
                 onClick={() => setIsSelfChangePinOpen(false)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white cursor-pointer"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-neutral-300 leading-relaxed">
+            <p className="text-xs text-neutral-600 leading-relaxed">
               يشترط إدخال الرمز السري القديم المعتمد حالياً، ثم كتابة الرمز السري الجديد وتأكيده بالمثل.
             </p>
 
             {selfPinError && (
-              <div className="p-3 rounded-xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
                 <span>{selfPinError}</span>
               </div>
             )}
 
             <form onSubmit={handleSelfChangePin} className="space-y-3.5 text-xs text-right">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  الرمز السري القديم / الحالي <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  الرمز السري القديم / الحالي <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type={showSelfPins ? 'text' : 'password'}
@@ -3663,13 +4148,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أدخل الرمز السري القديم"
                   value={selfOldPin}
                   onChange={(e) => setSelfOldPin(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono tracking-wider"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono tracking-wider"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  الرمز السري الجديد (4 أرقام أو أكثر) <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  الرمز السري الجديد (4 أرقام أو أكثر) <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type={showSelfPins ? 'text' : 'password'}
@@ -3678,13 +4163,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أدخل الرمز السري الجديد"
                   value={selfNewPin}
                   onChange={(e) => setSelfNewPin(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono tracking-wider"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono tracking-wider"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  تأكيد الرمز السري الجديد <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  تأكيد الرمز السري الجديد <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type={showSelfPins ? 'text' : 'password'}
@@ -3693,7 +4178,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أعد كتابة الرمز الجديد للتأكيد"
                   value={selfConfirmPin}
                   onChange={(e) => setSelfConfirmPin(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono tracking-wider"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono tracking-wider"
                 />
               </div>
 
@@ -3705,7 +4190,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onChange={(e) => setShowSelfPins(e.target.checked)}
                   className="rounded accent-[#D4AF37] cursor-pointer"
                 />
-                <label htmlFor="show-self-pins-toggle" className="text-neutral-400 text-[11px] cursor-pointer">
+                <label htmlFor="show-self-pins-toggle" className="text-neutral-600 text-[11px] cursor-pointer">
                   إظهار الأرقام أثناء الكتابة
                 </label>
               </div>
@@ -3714,7 +4199,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsSelfChangePinOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-700 hover:text-neutral-900 cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -3729,47 +4214,48 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Main Admin Reset Employee PIN directly */}
-      {adminResetMember && (
+      {adminResetMember && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
           onClick={() => setAdminResetMember(null)}
         >
           <div 
-            className="w-full max-w-md bg-[#111116] border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl animate-ios-fade-in"
+            className="w-full max-w-md bg-white border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+            <div className="flex items-center justify-between pb-3 border-b border-[#D4AF37]/25">
+              <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#B38728]" />
                 <span>تعديل الرمز السري للموظف ({adminResetMember.name})</span>
               </h3>
               <button
                 onClick={() => setAdminResetMember(null)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white cursor-pointer"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#1A1A26] border border-[#D4AF37]/30 text-xs text-[#F3E5AB]">
-              بصفتك المدير العام، يمكنك تعيين وتعيين رمز سري جديد مباشر لـ <strong>{adminResetMember.name}</strong> ليستخدمه في تسجيل الدخول القادم.
+            <div className="p-3 rounded-xl bg-neutral-50 border border-[#D4AF37]/35 text-xs text-[#7A5912]">
+              بصفتك المدير العام، يمكنك تعيين رمز سري جديد مباشر لـ <strong>{adminResetMember.name}</strong> ليستخدمه في تسجيل الدخول القادم.
             </div>
 
             {adminResetPinError && (
-              <div className="p-3 rounded-xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
                 <span>{adminResetPinError}</span>
               </div>
             )}
 
             <form onSubmit={handleAdminResetStaffPin} className="space-y-3.5 text-xs text-right">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  الرمز السري الجديد للموظف <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  الرمز السري الجديد للموظف <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type="password"
@@ -3778,13 +4264,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أدخل رمز سري جديد للموظف"
                   value={adminNewPinInput}
                   onChange={(e) => setAdminNewPinInput(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono tracking-wider"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono tracking-wider"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">
-                  تأكيد الرمز السري الجديد <span className="text-[#D4AF37]">*</span>
+                <label className="block text-neutral-700 font-bold mb-1">
+                  تأكيد الرمز السري الجديد <span className="text-[#B38728]">*</span>
                 </label>
                 <input
                   type="password"
@@ -3793,7 +4279,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   placeholder="أعد كتابة الرمز للتأكيد"
                   value={adminConfirmPinInput}
                   onChange={(e) => setAdminConfirmPinInput(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-[#171720] border border-neutral-700 rounded-xl text-white outline-none focus:border-[#D4AF37] font-mono tracking-wider"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-[#D4AF37]/35 rounded-xl text-neutral-900 outline-none focus:border-[#D4AF37] font-mono tracking-wider"
                 />
               </div>
 
@@ -3801,7 +4287,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setAdminResetMember(null)}
-                  className="px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-700 hover:text-neutral-900 cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -3816,24 +4302,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Edit Product Modal */}
-      {editingProduct && (
+      {/* Edit Product Modal - Rendered via Portal on document.body so it ALWAYS opens fixed in the center of the user's screen viewport */}
+      {editingProduct && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setEditingProduct(null)}
         >
           <div 
-            className="w-full max-w-lg bg-[#111116] border border-[#D4AF37]/50 rounded-2xl p-6 text-right space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-lg bg-white border-2 border-[#D4AF37]/60 rounded-2xl p-5 sm:p-6 text-right space-y-4 shadow-2xl max-h-[88vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h3 className="text-sm font-bold text-white">تعديل بيانات وصور المنتج</h3>
+            <div className="flex items-center justify-between pb-3 border-b border-[#D4AF37]/25 sticky top-0 bg-white z-10">
+              <h3 className="text-sm font-bold text-neutral-900">تعديل بيانات ومخزون وصور المنتج</h3>
               <button
                 onClick={() => setEditingProduct(null)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <XCircle className="w-5 h-5" />
               </button>
@@ -3841,18 +4328,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             <form onSubmit={handleSaveEditProduct} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-neutral-300 mb-1">اسم المنتج</label>
+                <label className="block text-neutral-700 font-semibold mb-1">اسم المنتج</label>
                 <input
                   type="text"
                   required
                   value={editingProduct.name}
                   onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#171720] border border-neutral-700 rounded-lg text-white outline-none"
+                  className="w-full px-3 py-2 bg-neutral-50 border border-[#D4AF37]/35 rounded-lg text-neutral-900 outline-none focus:border-[#D4AF37]"
                 />
               </div>
 
               <div>
-                <label className="block text-neutral-300 mb-1">السعر بالدينار العراقي (د.ع)</label>
+                <label className="block text-neutral-700 font-semibold mb-1">السعر بالدينار العراقي (د.ع)</label>
                 <input
                   type="number"
                   required
@@ -3870,17 +4357,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       priceIQD: Number(e.target.value)
                     })
                   }
-                  className="w-full px-3 py-2 bg-[#171720] border border-neutral-700 rounded-lg text-white font-mono outline-none"
+                  className="w-full px-3 py-2 bg-neutral-50 border border-[#D4AF37]/35 rounded-lg text-neutral-900 font-mono outline-none focus:border-[#D4AF37]"
                 />
-                <span className="text-[10px] text-[#F3E5AB] block mt-1">
+                <span className="text-[10px] text-[#7A5912] font-bold block mt-1">
                   {formatPrice(editingProduct.priceUSD, 'IQD')}
                 </span>
               </div>
 
               {/* Lists checklist in edit modal */}
               {productLists && productLists.length > 0 && (
-                <div className="bg-[#171720] p-3 rounded-xl border border-neutral-800 space-y-2">
-                  <label className="block text-neutral-300 font-medium">القوائم والمجموعات لهذا المنتج:</label>
+                <div className="bg-neutral-50 p-3 rounded-xl border border-[#D4AF37]/30 space-y-2">
+                  <label className="block text-neutral-700 font-semibold">القوائم والمجموعات لهذا المنتج:</label>
                   <div className="flex flex-wrap gap-1.5">
                     {productLists.map((list) => {
                       const isIncluded = list.productIds.includes(editingProduct.id);
@@ -3903,8 +4390,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           }}
                           className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
                             isIncluded
-                              ? 'bg-[#2A261A] text-[#F3E5AB] border-[#D4AF37]'
-                              : 'bg-[#14141C] text-neutral-400 border-neutral-700 hover:text-white'
+                              ? 'gold-gradient-bg text-black border-[#D4AF37] font-bold'
+                              : 'bg-white text-neutral-600 border-[#D4AF37]/30 hover:text-neutral-900'
                           }`}
                         >
                           <span>{isIncluded ? '✓' : '+'}</span>
@@ -3917,12 +4404,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               )}
 
               {/* Edit Images List */}
-              <div className="bg-[#171720] p-3 rounded-xl border border-neutral-800 space-y-2.5">
-                <label className="block text-neutral-300 font-medium">صور المنتج:</label>
+              <div className="bg-neutral-50 p-3 rounded-xl border border-[#D4AF37]/30 space-y-2.5">
+                <label className="block text-neutral-700 font-semibold">صور المنتج:</label>
                 
                 <div className="flex gap-2">
-                  <label className="flex-1 py-1.5 px-3 bg-[#242432] hover:bg-[#2E2E3E] rounded-lg text-center cursor-pointer text-xs font-semibold text-white border border-neutral-700 flex items-center justify-center gap-1.5">
-                    {isEditCompressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                  <label className="flex-1 py-1.5 px-3 bg-white hover:bg-neutral-100 rounded-lg text-center cursor-pointer text-xs font-semibold text-neutral-900 border border-[#D4AF37]/40 flex items-center justify-center gap-1.5">
+                    {isEditCompressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-[#B38728]" />}
                     <span>{isEditCompressing ? 'جاري المعالجة...' : 'رفع صور إضافية'}</span>
                     <input
                       type="file"
@@ -3941,12 +4428,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       placeholder="أو رابط صورة https://..."
                       value={editImageUrlInput}
                       onChange={(e) => setEditImageUrlInput(e.target.value)}
-                      className="w-full px-2 py-1 bg-[#14141C] border border-neutral-700 rounded text-xs text-white"
+                      className="w-full px-2 py-1 bg-white border border-[#D4AF37]/35 rounded text-xs text-neutral-900"
                     />
                     <button
                       type="button"
                       onClick={handleAddEditImageUrl}
-                      className="px-2.5 py-1 bg-[#282838] text-[#F3E5AB] rounded text-xs font-bold"
+                      className="px-2.5 py-1 gold-gradient-bg text-black rounded text-xs font-bold cursor-pointer"
                     >
                       +
                     </button>
@@ -3955,7 +4442,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                 <div className="grid grid-cols-4 gap-2 pt-1">
                   {(editingProduct.images && editingProduct.images.length > 0 ? editingProduct.images : [editingProduct.image]).map((img, idx) => (
-                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-neutral-700 bg-black aspect-square">
+                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-[#D4AF37]/35 bg-white aspect-square">
                       <img src={img} alt="" className="w-full h-full object-contain p-1" />
                       <button
                         type="button"
@@ -3971,181 +4458,393 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
 
               <div>
-                <label className="block text-neutral-300 mb-1">وصف المنتج</label>
+                <label className="block text-neutral-700 font-semibold mb-1">وصف المنتج</label>
                 <textarea
                   rows={2}
                   value={editingProduct.description}
                   onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value, shortDesc: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#171720] border border-neutral-700 rounded-lg text-white outline-none resize-none"
+                  className="w-full px-3 py-2 bg-neutral-50 border border-[#D4AF37]/35 rounded-lg text-neutral-900 outline-none resize-none focus:border-[#D4AF37]"
                 />
               </div>
 
-              {/* Edit Product Sizes Section */}
-              <div className="bg-[#171720] p-3.5 rounded-xl border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-[#D4AF37]" />
-                    <label className="text-white font-bold text-xs">
-                      قياسات وأحجام المنتج:
-                    </label>
-                  </div>
-                  <span className="text-[11px] font-semibold text-[#F3E5AB]">
-                    {(editingProduct.sizes && editingProduct.sizes.length > 0)
-                      ? `(${editingProduct.sizes.length} قياسات محددة)`
-                      : '(بدون قياسات)'}
-                  </span>
-                </div>
+              {/* Edit Product Stock / Inventory Section */}
+              {(() => {
+                const editVariants = getProductVariants(editingProduct);
+                const editImages =
+                  editingProduct.images && editingProduct.images.length > 0
+                    ? editingProduct.images
+                    : [editingProduct.image].filter(Boolean);
 
-                <p className="text-[11px] text-neutral-400">
-                  إذا لم تضف أي قياسات فلن تظهر خانة القياس للزبون نهائياً.
-                </p>
+                return (
+                  <>
+                    <div className="bg-neutral-50 p-3.5 rounded-xl border border-[#D4AF37]/35 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-[#B38728]" />
+                          <label className="text-neutral-900 font-bold text-xs">
+                            الكمية المتوفرة في المخزون (عدد القطع):
+                          </label>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#7A5912]">
+                          {editVariants.length > 0
+                            ? `مجموع مخزون الخانات (${editVariants.reduce((s, v) => s + v.stockCount, 0)} قطعة)`
+                            : (editingProduct.stockCount ?? 10) > 0
+                            ? `متوفر (${editingProduct.stockCount ?? 10} قطعة)`
+                            : 'نفذ من المخزون (0)'}
+                        </span>
+                      </div>
 
-                {/* Quick Presets */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] text-neutral-400 ml-1">ملابس:</span>
-                    {['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', 'Free Size'].map((preset) => {
-                      const isAdded = (editingProduct.sizes || []).includes(preset);
-                      return (
-                        <button
-                          type="button"
-                          key={preset}
-                          onClick={() => handleToggleEditSizePreset(preset)}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            isAdded
-                              ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37]'
-                              : 'bg-[#12121A] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
-                          }`}
-                        >
-                          {isAdded ? `✓ ${preset}` : preset}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                    <span className="text-[10px] text-neutral-400 ml-1">أحذية:</span>
-                    {['38', '39', '40', '41', '42', '43', '44', '45'].map((preset) => {
-                      const isAdded = (editingProduct.sizes || []).includes(preset);
-                      return (
-                        <button
-                          type="button"
-                          key={preset}
-                          onClick={() => handleToggleEditSizePreset(preset)}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            isAdded
-                              ? 'bg-[#D4AF37] text-black font-bold border-[#D4AF37]'
-                              : 'bg-[#12121A] text-neutral-300 border-neutral-700 hover:border-[#D4AF37] hover:text-white'
-                          }`}
-                        >
-                          {isAdded ? `✓ ${preset}` : preset}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom size input */}
-                <div className="flex gap-2 pt-1 border-t border-neutral-800/80">
-                  <input
-                    type="text"
-                    placeholder="اكتب قياساً مخصصاً (مثال: XXL أو 42)..."
-                    value={editSizeInput}
-                    onChange={(e) => setEditSizeInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddEditSize();
-                      }
-                    }}
-                    className="flex-1 px-2.5 py-1.5 bg-[#12121A] border border-neutral-700 focus:border-[#D4AF37] rounded-lg text-white text-xs outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAddEditSize()}
-                    className="px-3 py-1.5 bg-[#252535] hover:bg-[#D4AF37] hover:text-black text-[#F3E5AB] rounded-lg text-xs font-bold transition-all cursor-pointer"
-                  >
-                    + إضافة
-                  </button>
-                </div>
-
-                {/* Active sizes chips */}
-                {editingProduct.sizes && editingProduct.sizes.length > 0 ? (
-                  <div className="pt-1.5 border-t border-neutral-800/80 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-neutral-400">القياسات الحالية:</span>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct({ ...editingProduct, sizes: [] })}
-                        className="text-[10px] text-red-400 hover:underline cursor-pointer"
-                      >
-                        مسح كافة القياسات
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {editingProduct.sizes.map((sz) => (
-                        <span
-                          key={sz}
-                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-[#222230] text-[#F3E5AB] border border-[#D4AF37]/50 text-xs font-bold shadow-sm"
-                        >
-                          <span>{sz}</span>
+                      {editVariants.length > 0 ? (
+                        <div className="p-2.5 rounded-lg bg-white border border-[#D4AF37]/35 text-[11px] text-[#7A5912] font-bold flex items-center justify-between">
+                          <span>يتم حساب المخزون الكلي تلقائياً من مجموع مخزون الألوان/الخانات بالأسفل</span>
+                          <span className="font-mono text-xs text-neutral-900">
+                            {editVariants.reduce((s, v) => s + v.stockCount, 0)} قطعة
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleRemoveEditSize(sz)}
-                            className="text-neutral-400 hover:text-red-400 p-0.5 rounded cursor-pointer transition-colors"
+                            onClick={() => {
+                              const cur = typeof editingProduct.stockCount === 'number' ? editingProduct.stockCount : 10;
+                              const next = Math.max(0, cur - 1);
+                              setEditingProduct({ ...editingProduct, stockCount: next, inStock: next > 0 });
+                            }}
+                            className="w-8 h-8 rounded-lg bg-white border border-[#D4AF37]/40 text-neutral-900 font-bold flex items-center justify-center cursor-pointer"
                           >
-                            <X className="w-3 h-3" />
+                            -
                           </button>
-                        </span>
-                      ))}
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={typeof editingProduct.stockCount === 'number' ? editingProduct.stockCount : 10}
+                            onChange={(e) => {
+                              const next = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                              setEditingProduct({ ...editingProduct, stockCount: next, inStock: next > 0 });
+                            }}
+                            className="w-24 px-3 py-1.5 text-center bg-white border border-[#D4AF37]/45 rounded-lg text-neutral-900 font-mono font-bold text-xs outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = typeof editingProduct.stockCount === 'number' ? editingProduct.stockCount : 10;
+                              const next = cur + 1;
+                              setEditingProduct({ ...editingProduct, stockCount: next, inStock: true });
+                            }}
+                            className="w-8 h-8 rounded-lg bg-white border border-[#D4AF37]/40 text-[#7A5912] font-bold flex items-center justify-center cursor-pointer"
+                          >
+                            +
+                          </button>
+
+                          <div className="flex flex-wrap gap-1 mr-auto">
+                            {[0, 5, 10, 25, 50].map((qty) => (
+                              <button
+                                type="button"
+                                key={qty}
+                                onClick={() => setEditingProduct({ ...editingProduct, stockCount: qty, inStock: qty > 0 })}
+                                className="px-2 py-1 rounded bg-white border border-[#D4AF37]/30 hover:border-[#D4AF37] text-[10px] font-mono font-bold text-neutral-700 cursor-pointer"
+                              >
+                                {qty}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-2 rounded bg-[#121218] border border-dashed border-neutral-800 text-center text-[10px] text-neutral-400">
-                    لا توجد قياسات محددة (لن يظهر أي خيار قياس للزبون)
-                  </div>
-                )}
-              </div>
+
+                    {/* Edit Custom Product Options / Variants with Per-Option Stock & Image */}
+                    <div className="bg-neutral-50 p-3.5 rounded-xl border border-[#D4AF37]/45 space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <Sliders className="w-4 h-4 text-[#B38728]" />
+                          <label className="text-neutral-900 font-bold text-xs">
+                            خانات / ألوان المنتج مع صورة ومخزون كل لون:
+                          </label>
+                        </div>
+                        <span className="text-[10px] text-[#7A5912] font-bold">
+                          {editVariants.length > 0
+                            ? `${editVariants.length} خانات مفعلة`
+                            : 'لا توجد خانات (لن تظهر للزبون)'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-neutral-700 font-semibold mb-1">
+                          عنوان الخانة (مثال: اللون المطلوب / النوع):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="اللون / النوع المطلوب"
+                          value={editingProduct.customOptionLabel ?? 'اللون / النوع المطلوب'}
+                          onChange={(e) =>
+                            setEditingProduct({
+                              ...editingProduct,
+                              customOptionLabel: e.target.value
+                            })
+                          }
+                          className="w-full px-3 py-1.5 bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 text-xs outline-none focus:border-[#D4AF37]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-neutral-700 font-semibold mb-1">
+                          إضافة خيار أو لون جديد مع تحديد مخزونه:
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="اسم اللون (مثال: أسود، بنفسجي...)"
+                            value={editOptionInput}
+                            onChange={(e) => setEditOptionInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddEditOptionItems(editOptionInput);
+                              }
+                            }}
+                            className="flex-1 px-3 py-1.5 bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 text-xs outline-none focus:border-[#D4AF37]"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            title="مخزون هذا اللون"
+                            value={editOptionStockInput}
+                            onChange={(e) => setEditOptionStockInput(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                            className="w-16 px-2 py-1.5 text-center bg-white border border-[#D4AF37]/35 rounded-lg text-neutral-900 font-mono font-bold text-xs outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddEditOptionItems(editOptionInput)}
+                            className="px-3 py-1.5 gold-gradient-bg text-black font-bold rounded-lg text-xs cursor-pointer shrink-0 flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>إضافة</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {editVariants.length > 0 && (
+                        <div className="pt-2 border-t border-[#D4AF37]/20 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-neutral-700 font-bold">
+                              الخانات الحالية (اضغط على الصورة لربطها باللون أو عدّل المخزون):
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingProduct({
+                                  ...editingProduct,
+                                  variantOptions: [],
+                                  customOptions: []
+                                })
+                              }
+                              className="text-[10px] text-red-600 hover:underline font-bold cursor-pointer"
+                            >
+                              حذف جميع الخانات
+                            </button>
+                          </div>
+
+                          <div className="space-y-2 max-h-60 overflow-y-auto pr-0.5">
+                            {editVariants.map((opt, idx) => (
+                              <div
+                                key={opt.name}
+                                className="p-2.5 rounded-xl bg-white border border-[#D4AF37]/40 space-y-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-lg border border-[#D4AF37]/35 bg-[#FAF8F2] flex items-center justify-center overflow-hidden shrink-0 p-0.5">
+                                      {opt.image ? (
+                                        <img src={opt.image} alt={opt.name} className="w-full h-full object-contain" />
+                                      ) : (
+                                        <ImageIcon className="w-4 h-4 text-neutral-400" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-extrabold text-neutral-900 block">
+                                        {opt.name}
+                                      </span>
+                                      <span className="text-[10px] text-[#7A5912] font-semibold">
+                                        {opt.image ? 'مرتبط بصورة مخصصة ✓' : 'اختر صورة لهذا اللون بالأسفل'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1 bg-[#FAF7EF] px-1.5 py-0.5 rounded-lg border border-[#D4AF37]/35">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = editVariants.map((v, i) =>
+                                            i === idx ? { ...v, stockCount: Math.max(0, v.stockCount - 1) } : v
+                                          );
+                                          const total = next.reduce((s, v) => s + v.stockCount, 0);
+                                          setEditingProduct({
+                                            ...editingProduct,
+                                            variantOptions: next,
+                                            customOptions: next.map((v) => v.name),
+                                            stockCount: total,
+                                            inStock: total > 0
+                                          });
+                                        }}
+                                        className="w-5 h-5 rounded bg-white border border-[#D4AF37]/40 text-neutral-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                      >
+                                        -
+                                      </button>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={opt.stockCount}
+                                        onChange={(e) => {
+                                          const val = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                                          const next = editVariants.map((v, i) =>
+                                            i === idx ? { ...v, stockCount: val } : v
+                                          );
+                                          const total = next.reduce((s, v) => s + v.stockCount, 0);
+                                          setEditingProduct({
+                                            ...editingProduct,
+                                            variantOptions: next,
+                                            customOptions: next.map((v) => v.name),
+                                            stockCount: total,
+                                            inStock: total > 0
+                                          });
+                                        }}
+                                        className="w-10 h-5 text-center bg-white border border-[#D4AF37]/35 rounded font-mono font-bold text-[11px] text-neutral-900 outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = editVariants.map((v, i) =>
+                                            i === idx ? { ...v, stockCount: v.stockCount + 1 } : v
+                                          );
+                                          const total = next.reduce((s, v) => s + v.stockCount, 0);
+                                          setEditingProduct({
+                                            ...editingProduct,
+                                            variantOptions: next,
+                                            customOptions: next.map((v) => v.name),
+                                            stockCount: total,
+                                            inStock: total > 0
+                                          });
+                                        }}
+                                        className="w-5 h-5 rounded bg-white border border-[#D4AF37]/40 text-[#7A5912] font-bold text-xs flex items-center justify-center cursor-pointer"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const next = editVariants.filter((_, i) => i !== idx);
+                                        const total = next.reduce((s, v) => s + v.stockCount, 0);
+                                        setEditingProduct({
+                                          ...editingProduct,
+                                          variantOptions: next,
+                                          customOptions: next.map((v) => v.name),
+                                          stockCount: next.length > 0 ? total : editingProduct.stockCount
+                                        });
+                                      }}
+                                      className="p-1 text-red-500 hover:text-red-700 cursor-pointer"
+                                      title="حذف هذه الخانة"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Image Picker Row for this option */}
+                                <div className="pt-1.5 border-t border-neutral-100 flex items-center gap-2 flex-wrap">
+                                  <label className="px-2 py-1 rounded bg-[#FAF7EF] hover:bg-[#FAF4E1] border border-[#D4AF37]/40 text-[#7A5912] font-bold text-[10px] cursor-pointer flex items-center gap-1">
+                                    <Upload className="w-3 h-3 text-[#B38728]" />
+                                    <span>رفع صورة لـ ({opt.name})</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleUploadEditVariantImage(opt.name, e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+
+                                  {editImages.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <span className="text-[10px] text-neutral-500">أو اختر من الصور:</span>
+                                      {editImages.map((imgUrl, imgIdx) => {
+                                        const isLinked = opt.image === imgUrl;
+                                        return (
+                                          <button
+                                            type="button"
+                                            key={imgIdx}
+                                            onClick={() => {
+                                              const next = editVariants.map((v, i) =>
+                                                i === idx ? { ...v, image: imgUrl } : v
+                                              );
+                                              setEditingProduct({
+                                                ...editingProduct,
+                                                variantOptions: next
+                                              });
+                                            }}
+                                            className={`w-7 h-7 rounded overflow-hidden border-2 transition-all cursor-pointer p-0.5 bg-white ${
+                                              isLinked
+                                                ? 'border-[#D4AF37] scale-105'
+                                                : 'border-neutral-200 opacity-65 hover:opacity-100'
+                                            }`}
+                                          >
+                                            <img src={imgUrl} alt="" className="w-full h-full object-contain" />
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Edit Featured in Strip Toggle */}
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-[#171720] border border-neutral-700 hover:border-[#D4AF37]/60 cursor-pointer transition-all">
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-[#D4AF37]/35 hover:border-[#D4AF37] cursor-pointer transition-all">
                 <input
                   type="checkbox"
                   checked={editingProduct.isFeaturedInStrip ?? false}
                   onChange={(e) => setEditingProduct({ ...editingProduct, isFeaturedInStrip: e.target.checked })}
                   className="w-4 h-4 accent-[#D4AF37] rounded cursor-pointer"
                 />
-                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#D4AF37]" />
                   <span>عرض هذا المنتج في الشريط المتحرك التفاعلي بالصفحة الرئيسية</span>
                 </span>
               </label>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-neutral-800">
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#D4AF37]/20 sticky bottom-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-4 py-2 text-neutral-400 hover:text-white"
+                  className="px-4 py-2 text-neutral-600 hover:text-neutral-900 font-semibold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-bold text-black gold-gradient-bg rounded-lg hover:brightness-110"
+                  className="px-5 py-2 font-bold text-black gold-gradient-bg rounded-lg hover:brightness-110 cursor-pointer"
                 >
                   حفظ التعديلات
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Printable Delivery Waybill Modal */}
-      {waybillOrder && (
+      {waybillOrder && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
           onClick={() => setWaybillOrder(null)}
         >
           <div 
@@ -4165,7 +4864,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Customer Details Box */}
-            <div className="bg-neutral-100 p-4 rounded-xl border border-neutral-300 space-y-2 text-xs">
+            <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-300 space-y-2 text-xs">
               <div className="text-sm font-bold text-neutral-900 border-b border-neutral-300 pb-1">
                 بيانات المستلم وعنوان التوصيل:
               </div>
@@ -4184,7 +4883,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <span className="font-semibold text-neutral-800">{waybillOrder.customer?.address}</span>
               </div>
               {waybillOrder.customer?.notes && (
-                <div className="bg-amber-100 p-2 rounded text-amber-900 font-medium">
+                <div className="bg-amber-50 border border-amber-200 p-2 rounded text-amber-900 font-medium">
                   ملاحظات إضافية من الزبون: {waybillOrder.customer.notes}
                 </div>
               )}
@@ -4206,9 +4905,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <tr key={i} className="border-b border-neutral-200">
                       <td className="py-2 font-medium">
                         <div className="font-bold text-neutral-900">{item?.product?.name}</div>
-                        {(item?.selectedSize || (item as any)?.size) && (
-                          <div className="inline-block mt-1 text-[11px] text-black font-extrabold bg-amber-200 border border-amber-400 px-2 py-0.5 rounded">
-                            القياس المطلوب: {item?.selectedSize || (item as any)?.size}
+                        {item?.selectedOption && (
+                          <div className="text-[11px] font-bold text-[#7A5912] mt-0.5">
+                            {item.selectedOptionLabel || item.product?.customOptionLabel || 'الخانة المحددة'}: {item.selectedOption}
                           </div>
                         )}
                       </td>
@@ -4221,7 +4920,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Total to Collect */}
-            <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 space-y-2">
+            <div className="bg-neutral-50 p-4 rounded-xl border-2 border-[#D4AF37] space-y-2">
               {(() => {
                 const isWaybillFreeShipping = waybillOrder.isFreeShipping !== undefined
                   ? waybillOrder.isFreeShipping
@@ -4229,10 +4928,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 const grandTotal = isWaybillFreeShipping ? toIQD(waybillOrder.totalUSD) : toIQD(waybillOrder.totalUSD) + 5000;
                 return (
                   <>
-                    <div className="flex items-center justify-between text-xs border-b border-yellow-300/70 pb-1.5">
+                    <div className="flex items-center justify-between text-xs border-b border-[#D4AF37]/30 pb-1.5">
                       <span className="text-neutral-700 font-semibold">أجور التوصيل:</span>
                       {isWaybillFreeShipping ? (
-                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
                           توصيل مجاني 🎉 (0 د.ع)
                         </span>
                       ) : (
@@ -4257,54 +4956,55 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <div className="flex justify-between items-center pt-3 border-t">
               <button
                 onClick={() => setWaybillOrder(null)}
-                className="px-4 py-2 text-xs text-neutral-600 hover:text-black font-medium"
+                className="px-4 py-2 text-xs text-neutral-600 hover:text-black font-medium cursor-pointer"
               >
                 إغلاق
               </button>
 
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2.5 bg-black text-white text-xs font-bold rounded-lg hover:bg-neutral-800 flex items-center gap-2"
+                className="px-6 py-2.5 gold-gradient-bg text-black text-xs font-bold rounded-lg hover:brightness-110 flex items-center gap-2 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>طباعة البوليصة الآن</span>
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Block Customer Confirmation Modal */}
-      {blockingUser && (
+      {blockingUser && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setBlockingUser(null)}
         >
           <div 
-            className="w-full max-w-md bg-[#121218] border border-red-700/60 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
+            className="w-full max-w-md bg-white border border-red-400 rounded-2xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
                 <Ban className="w-5 h-5" />
                 <span>تأكيد حظر حساب الزبون</span>
               </div>
               <button
                 onClick={() => setBlockingUser(null)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <p className="text-neutral-300 leading-relaxed">
-                أنت على وشك حظر حساب الزبون <strong className="text-white font-bold">{blockingUser.name}</strong> (رقم: {blockingUser.phone}).
+              <p className="text-neutral-600 leading-relaxed">
+                أنت على وشك حظر حساب الزبون <strong className="text-neutral-900 font-bold">{blockingUser.name}</strong> (رقم: {blockingUser.phone}).
                 عند الحظر، لن يتمكن الزبون من تثبيت أي طلبات جديدة في المتجر.
               </p>
 
               <div>
-                <label className="block text-neutral-400 font-medium mb-1.5">
+                <label className="block text-neutral-700 font-bold mb-1.5">
                   سبب الحظر (سيظهر للإدارة وملاحظات الحظر):
                 </label>
                 <textarea
@@ -4312,15 +5012,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   value={blockReasonInput}
                   onChange={(e) => setBlockReasonInput(e.target.value)}
                   placeholder="مثال: تكرار عدم استلام الطلبات، رقم غير متاح، إلخ..."
-                  className="w-full p-2.5 bg-[#171722] border border-neutral-700 rounded-xl text-white outline-none focus:border-red-500 resize-none"
+                  className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 outline-none focus:border-red-500 resize-none"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-neutral-800">
+              <div className="pt-2 flex justify-end gap-2 border-t border-neutral-200">
                 <button
                   type="button"
                   onClick={() => setBlockingUser(null)}
-                  className="px-4 py-2 text-neutral-400 hover:text-white"
+                  className="px-4 py-2 text-neutral-600 hover:text-neutral-900 font-semibold cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -4336,46 +5036,47 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete User Account Confirmation Modal */}
-      {userToDelete && (
+      {userToDelete && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setUserToDelete(null)}
         >
           <div 
-            className="w-full max-w-md bg-[#121218] border border-red-700/80 rounded-3xl p-6 text-right space-y-4 shadow-[0_0_40px_rgba(220,38,38,0.25)]"
+            className="w-full max-w-md bg-white border border-red-400 rounded-3xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
                 <Trash2 className="w-5 h-5" />
                 <span>تأكيد حذف حساب الزبون نهائياً</span>
               </div>
               <button
                 onClick={() => setUserToDelete(null)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <p className="text-neutral-300 leading-relaxed">
-                أنت على وشك حذف حساب الزبون <strong className="text-white font-bold">{userToDelete.name || userToDelete.email || userToDelete.phone}</strong> نهائياً من قاعدة بيانات المتجر.
+              <p className="text-neutral-600 leading-relaxed">
+                أنت على وشك حذف حساب الزبون <strong className="text-neutral-900 font-bold">{userToDelete.name || userToDelete.email || userToDelete.phone}</strong> نهائياً من قاعدة بيانات المتجر.
               </p>
-              <p className="text-[11px] text-red-400 bg-red-950/40 p-2.5 rounded-xl border border-red-900/50">
+              <p className="text-[11px] text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-200 font-semibold">
                 ⚠️ تحذير: لا يمكن التراجع عن هذه الخطوة بعد إتمامها.
               </p>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-neutral-800">
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-neutral-200">
               <button
                 type="button"
                 onClick={() => setUserToDelete(null)}
-                className="px-4 py-2 text-neutral-400 hover:text-white text-xs font-medium cursor-pointer"
+                className="px-4 py-2 text-neutral-600 hover:text-neutral-900 text-xs font-semibold cursor-pointer"
               >
                 إلغاء
               </button>
@@ -4409,56 +5110,57 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Order Rejection Confirmation Modal */}
-      {orderToReject && (
+      {orderToReject && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
           onClick={() => setOrderToReject(null)}
         >
           <div 
-            className="w-full max-w-md bg-[#121218] border-2 border-red-700/80 rounded-3xl p-6 text-right space-y-4 shadow-[0_0_50px_rgba(220,38,38,0.25)]"
+            className="w-full max-w-md bg-white border-2 border-red-400 rounded-3xl p-6 text-right space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
                 <span>تأكيد رفض الطلب وإلغاؤه</span>
               </div>
               <button
                 onClick={() => setOrderToReject(null)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white"
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Order Details Brief Card */}
-            <div className="p-3.5 rounded-2xl bg-[#181822] border border-neutral-800 space-y-2 text-xs">
+            <div className="p-3.5 rounded-2xl bg-neutral-50 border border-[#D4AF37]/30 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">رقم الطلب:</span>
-                <span className="font-mono font-bold text-[#F3E5AB] dir-ltr">{orderToReject.orderNumber}</span>
+                <span className="text-neutral-500">رقم الطلب:</span>
+                <span className="font-mono font-bold text-[#7A5912] dir-ltr">{orderToReject.orderNumber}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">اسم المشتري:</span>
-                <span className="font-bold text-white">{orderToReject.customer?.name || 'الزبون'}</span>
+                <span className="text-neutral-500">اسم المشتري:</span>
+                <span className="font-bold text-neutral-900">{orderToReject.customer?.name || 'الزبون'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">رقم الهاتف:</span>
-                <span className="font-mono text-neutral-300 dir-ltr">{orderToReject.customer?.phone || 'غير محدد'}</span>
+                <span className="text-neutral-500">رقم الهاتف:</span>
+                <span className="font-mono text-neutral-700 dir-ltr">{orderToReject.customer?.phone || 'غير محدد'}</span>
               </div>
-              <div className="flex items-center justify-between pt-1 border-t border-neutral-800/80">
-                <span className="text-neutral-400">المبلغ الكلي للطلب:</span>
-                <span className="font-mono font-bold text-red-400 text-sm">{formatPrice(orderToReject.totalUSD, orderToReject.currency)}</span>
+              <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
+                <span className="text-neutral-500">المبلغ الكلي للطلب:</span>
+                <span className="font-mono font-bold text-red-600 text-sm">{formatPrice(orderToReject.totalUSD, orderToReject.currency)}</span>
               </div>
             </div>
 
             {/* Rejection Reason Selection */}
             <div className="space-y-2 text-xs">
-              <label className="block text-neutral-300 font-semibold">
+              <label className="block text-neutral-700 font-bold">
                 حدد سبب رفض الطلب:
               </label>
               
@@ -4481,12 +5183,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     }}
                     className={`w-full text-right p-2.5 rounded-xl border text-xs font-medium transition-all flex items-center justify-between cursor-pointer ${
                       rejectReason === reason
-                        ? 'bg-red-950/70 text-red-200 border-red-600 shadow-sm'
-                        : 'bg-[#161620] text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-700'
+                        ? 'bg-red-50 text-red-800 border-red-400 font-bold shadow-xs'
+                        : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'
                     }`}
                   >
                     <span>{reason}</span>
-                    {rejectReason === reason && <Check className="w-4 h-4 text-red-400" />}
+                    {rejectReason === reason && <Check className="w-4 h-4 text-red-600" />}
                   </button>
                 ))}
               </div>
@@ -4498,23 +5200,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     placeholder="اكتب سبب الرفض هنا..."
                     value={customRejectReason}
                     onChange={(e) => setCustomRejectReason(e.target.value)}
-                    className="w-full p-2.5 bg-[#171722] border border-neutral-700 rounded-xl text-white text-xs outline-none focus:border-red-500 resize-none"
+                    className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 text-xs outline-none focus:border-red-500 resize-none"
                   />
                 </div>
               )}
             </div>
 
             {/* Warning Message */}
-            <p className="text-[11px] text-neutral-400 leading-relaxed bg-red-950/30 p-2.5 rounded-xl border border-red-900/40">
-              ⚠️ عند تأكيد الرفض، سيتم نقل الطلب إلى قسم <strong>"الطلبات المرفوضة"</strong> ولن يتم احتساب كاش أو ربح له في الخزينة.
+            <p className="text-[11px] text-red-800 leading-relaxed bg-red-50 p-2.5 rounded-xl border border-red-200">
+              ⚠️ عند تأكيد الرفض، سيتم نقل الطلب إلى قسم <strong>"الطلبات المرفوضة"</strong> وإرجاع الكميات للمخزون تلقائياً.
             </p>
 
             {/* Confirmation & Cancel Buttons */}
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-neutral-800">
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-neutral-200">
               <button
                 type="button"
                 onClick={() => setOrderToReject(null)}
-                className="px-4 py-2.5 rounded-xl bg-[#1A1A26] hover:bg-[#222232] text-neutral-300 hover:text-white text-xs font-medium transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-900 text-xs font-semibold transition cursor-pointer"
               >
                 تراجع / إلغاء
               </button>
@@ -4546,7 +5248,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Notification Center Modal for Admin */}
