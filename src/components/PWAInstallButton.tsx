@@ -19,7 +19,9 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'n
     try {
       const installed = await install();
       if (installed && onToast) {
-        onToast('تم بدء تثبيت تطبيق LC على هاتفك بنجاح!');
+        onToast('تم بدء تثبيت تطبيق LC الرسمي على هاتفك بنجاح!');
+      } else if (!installed && onToast) {
+        onToast('لتثبيت التطبيق الكامل مع أنميشن النظام: اضغط قائمة المتصفح (⋮) واختر «تثبيت التطبيق / Install app»');
       }
     } catch (e) {
       console.error('PWA Install trigger error:', e);

@@ -1,5 +1,5 @@
-// Service Worker for LC Boutique Background & Device Push Notifications
-const CACHE_NAME = 'lc-store-cache-v5';
+// Service Worker for LC Boutique PWA (WebAPK Installability + Push Notifications)
+const CACHE_NAME = 'lc-store-cache-v6';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -19,6 +19,30 @@ self.addEventListener('activate', (event) => {
         );
       })
     ])
+  );
+});
+
+// Required fetch handler for Android Chrome WebAPK compilation & Xiaomi native launcher animations
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  // Skip cross-origin requests (Firestore, Google Fonts, external CDNs) and backend API routes
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(request).catch(() => {
+      return caches.match(request).then((cached) => {
+        if (cached) return cached;
+        if (request.mode === 'navigate') {
+          return caches.match('/');
+        }
+        return Response.error();
+      });
+    })
   );
 });
 
@@ -49,8 +73,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'لديك تنبيه جديد من متجر LC',
-    icon: data.icon || '/pwa-192x192.png?v=white',
-    badge: '/icon.svg?v=white',
+    icon: data.icon || '/pwa-192x192.png?v=white2',
+    badge: '/icon.svg?v=white2',
     vibrate: [200, 100, 200],
     data: data.data || { url: '/' },
     renotify: true,

@@ -75,14 +75,36 @@ export default function App() {
     return false;
   });
 
+  const [appPopCycle, setAppPopCycle] = useState<number>(0);
+
   const handleSplashFinish = () => {
     setHasPlayedIntro(true);
+    setAppPopCycle((c) => c + 1);
     try {
       sessionStorage.setItem('lc_has_played_intro', 'true');
     } catch {
       // ignore
     }
   };
+
+  // Re-trigger Xiaomi HyperOS spring pop-up whenever the user reopens the app from the home screen
+  useEffect(() => {
+    let hiddenAt = 0;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+      } else if (document.visibilityState === 'visible' && hiddenAt > 0) {
+        const elapsed = Date.now() - hiddenAt;
+        hiddenAt = 0;
+        if (elapsed > 300 && currentView === 'store') {
+          setAppPopCycle((c) => c + 1);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [currentView]);
+
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
 
   // Store Products (Real products added by the owner only)
@@ -1391,17 +1413,26 @@ export default function App() {
           />
         </motion.div>
       ) : (
-        <motion.div
-          key="storefront-view"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="relative min-h-[100dvh] bg-white text-[#1A1814] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#6B4F0E] overflow-x-hidden"
-        >
-      
-      {/* High-End Brand Luxury Splash Screen Animation */}
-      {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}
+        <div className="relative min-h-[100dvh] bg-white overflow-x-hidden">
+          {/* High-End Brand Luxury Splash Screen Animation */}
+          {!hasPlayedIntro && <SplashScreen onFinish={handleSplashFinish} />}
+
+          <motion.div
+            key={`storefront-view-${appPopCycle}`}
+            initial={{ opacity: 0, scale: 0.88, y: 26 }}
+            animate={
+              hasPlayedIntro
+                ? { opacity: 1, scale: 1, y: 0 }
+                : { opacity: 0, scale: 0.88, y: 26 }
+            }
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{
+              duration: 0.46,
+              ease: [0.22, 1.15, 0.36, 1]
+            }}
+            style={{ transformOrigin: 'center 38%' }}
+            className="relative min-h-[100dvh] bg-white text-[#1A1814] flex flex-col font-sans selection:bg-[#D4AF37]/30 selection:text-[#6B4F0E] overflow-x-hidden will-change-transform"
+          >
       
       {/* Toast Notification (Top-Center Floating Pill) */}
       <AnimatePresence>
@@ -1735,6 +1766,7 @@ export default function App() {
           setCurrentView('admin');
         }} 
       />
+          </motion.div>
 
       {/* Modals & Overlays */}
       <ProductDetailModal
@@ -1841,7 +1873,7 @@ export default function App() {
         isAdmin={false}
       />
 
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );
