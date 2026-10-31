@@ -1,14 +1,32 @@
-// Service Worker for LC Boutique PWA (WebAPK Installability + Push Notifications)
-const CACHE_NAME = 'lc-store-cache-v6';
+// Service Worker for LC Boutique PWA (Instant App Shell Launch for Native OS Animation + Push Notifications)
+const CACHE_NAME = 'lc-store-shell-v8';
+const APP_SHELL_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png',
+];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(APP_SHELL_ASSETS).catch(() => {});
+    })
+  );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
       self.clients.claim(),
+      self.registration.navigationPreload
+        ? self.registration.navigationPreload.enable().catch(() => {})
+        : Promise.resolve(),
       caches.keys().then((keys) => {
         return Promise.all(
           keys.map((key) => {
@@ -17,12 +35,12 @@ self.addEventListener('activate', (event) => {
             }
           })
         );
-      })
+      }),
     ])
   );
 });
 
-// Required fetch handler for Android Chrome WebAPK compilation & Xiaomi native launcher animations
+// Instant Stale-While-Revalidate for App Shell so Android/Xiaomi OS Launcher animation never times out
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -33,15 +51,50 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // For HTML navigation requests: respond immediately from cache if available so the OS window animates instantly,
+  // while updating the cache in the background
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedIndex = (await cache.match('/index.html')) || (await cache.match('/'));
+        const networkFetch = (async () => {
+          try {
+            const preloadResponse = await event.preloadResponse;
+            if (preloadResponse && preloadResponse.ok) {
+              cache.put('/index.html', preloadResponse.clone());
+              return preloadResponse;
+            }
+            const freshResponse = await fetch(request);
+            if (freshResponse && freshResponse.ok) {
+              cache.put('/index.html', freshResponse.clone());
+            }
+            return freshResponse;
+          } catch (err) {
+            if (cachedIndex) return cachedIndex;
+            throw err;
+          }
+        })();
+
+        return cachedIndex || networkFetch;
+      })
+    );
+    return;
+  }
+
+  // For local static assets (JS, CSS, icons, manifest): Stale-While-Revalidate
   event.respondWith(
-    fetch(request).catch(() => {
-      return caches.match(request).then((cached) => {
-        if (cached) return cached;
-        if (request.mode === 'navigate') {
-          return caches.match('/');
-        }
-        return Response.error();
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request, { ignoreSearch: true });
+      const fetchPromise = fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        })
+        .catch(() => cached || Response.error());
+
+      return cached || fetchPromise;
     })
   );
 });
@@ -53,7 +106,7 @@ self.addEventListener('message', (event) => {
     self.registration.showNotification(title, {
       ...options,
       renotify: true,
-      requireInteraction: false
+      requireInteraction: false,
     });
   }
 });
@@ -73,23 +126,22 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'لديك تنبيه جديد من متجر LC',
-    icon: data.icon || '/pwa-192x192.png?v=white2',
-    badge: '/icon.svg?v=white2',
+    icon: data.icon || '/pwa-192x192.png',
+    badge: '/icon.svg',
     vibrate: [200, 100, 200],
     data: data.data || { url: '/' },
     renotify: true,
-    tag: data.tag || `lc-push-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+    tag: data.tag || `lc-push-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
   };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'متجر LC', options)
-  );
+  event.waitUntil(self.registration.showNotification(data.title || 'متجر LC', options));
 });
 
 // Handle Notification Click (Focus or Open App Window)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
+  const targetUrl =
+    event.notification.data && event.notification.data.url ? event.notification.data.url : '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

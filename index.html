@@ -3,9 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <title>متجر LC الرسمي | LC Store</title>
     
     <!-- Search Engine Indexing & Discovery -->
@@ -17,12 +14,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="متجر LC الرسمي" />
-    <link rel="manifest" href="/manifest.json?v=white2" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=white2" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/pwa-192x192.png?v=white2" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg?v=white2" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=white2" />
+    <meta name="apple-mobile-web-app-title" content="متجر LC" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     
     <!-- OpenGraph Social Sharing & Instant Previews (WhatsApp, Telegram, Instagram, Facebook) -->
     <meta property="og:type" content="website" />
@@ -95,19 +92,14 @@
   <body class="bg-white text-[#1A1814] antialiased selection:bg-[#D4AF37]/30 selection:text-[#6B4F0E]">
     <div id="root">
       <div id="lc-preloader" style="position: fixed; inset: 0; width: 100vw; height: 100dvh; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Cairo', system-ui, -apple-system, sans-serif; text-align: center; user-select: none; z-index: 2147483647; overflow: hidden;">
-        <div style="animation: xiaomiIconPop 0.52s cubic-bezier(0.22, 1.15, 0.36, 1) both; will-change: transform, opacity;">
-          <img src="/icon.svg?v=white2" alt="متجر LC الرسمي" style="width: 148px; height: 148px; border-radius: 34px; box-shadow: 0 18px 45px rgba(184, 134, 11, 0.16);" />
+        <div style="width: 224px; height: 224px; border-radius: 9999px; background: #FFFFFF; border: 1px solid rgba(212, 175, 55, 0.4); box-shadow: 0 12px 45px rgba(212, 175, 55, 0.14); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+          <div style="font-family: 'Cinzel', Georgia, serif; font-size: 60px; font-weight: 800; line-height: 1; letter-spacing: 0.06em; background: linear-gradient(135deg, #805B10 0%, #B8860B 30%, #D4AF37 65%, #8A6214 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">LC</div>
+          <div style="margin-top: 16px; font-family: 'Cinzel', Georgia, serif; font-size: 11px; font-weight: 700; color: #1A1814; letter-spacing: 0.38em;">LC STORE</div>
+          <div style="margin-top: 6px; font-size: 12px; font-weight: 700; color: #9A7217;">متجر LC الرسمي</div>
         </div>
-        <style>
-          @keyframes xiaomiIconPop {
-            0% { transform: scale(0.42) translateY(24px); opacity: 0; }
-            70% { transform: scale(1.04) translateY(-2px); opacity: 1; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
-          }
-        </style>
+        <div style="margin-top: 12px; font-size: 11px; color: #737373; font-weight: 500;">انقر في أي مكان للدخول الفوري</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

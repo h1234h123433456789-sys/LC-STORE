@@ -1,12 +1,11 @@
 {
   "id": "/",
   "name": "متجر LC الرسمي",
-  "short_name": "متجر LC الرسمي",
+  "short_name": "متجر LC",
   "description": "متجر LC الرسمي - أرقى المعروضات والمنتجات المختارة بعناية مع التوصيل السريع والدفع كاش عند الاستلام لكافة المحافظات.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "ar",
@@ -15,19 +14,19 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/pwa-192x192.png?v=white2",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.png?v=white2",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-maskable-512x512.png?v=white2",
+      "src": "/pwa-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
