@@ -90,16 +90,20 @@
     </script>
   </head>
   <body class="bg-white text-[#1A1814] antialiased selection:bg-[#D4AF37]/30 selection:text-[#6B4F0E]">
-    <div id="root">
-      <div id="lc-preloader" style="position: fixed; inset: 0; width: 100vw; height: 100dvh; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Cairo', system-ui, -apple-system, sans-serif; text-align: center; user-select: none; z-index: 2147483647; overflow: hidden;">
-        <div style="width: 224px; height: 224px; border-radius: 9999px; background: #FFFFFF; border: 1px solid rgba(212, 175, 55, 0.4); box-shadow: 0 12px 45px rgba(212, 175, 55, 0.14); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
-          <div style="font-family: 'Cinzel', Georgia, serif; font-size: 60px; font-weight: 800; line-height: 1; letter-spacing: 0.06em; background: linear-gradient(135deg, #805B10 0%, #B8860B 30%, #D4AF37 65%, #8A6214 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">LC</div>
-          <div style="margin-top: 16px; font-family: 'Cinzel', Georgia, serif; font-size: 11px; font-weight: 700; color: #1A1814; letter-spacing: 0.38em;">LC STORE</div>
-          <div style="margin-top: 6px; font-size: 12px; font-weight: 700; color: #9A7217;">متجر LC الرسمي</div>
+    <!-- Preloader placed outside #root to avoid sudden unmounting flash during React bootstrap -->
+    <div id="lc-preloader" style="position: fixed; inset: 0; width: 100vw; height: 100dvh; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Cairo', system-ui, -apple-system, sans-serif; text-align: center; user-select: none; z-index: 2147483647; overflow: hidden;">
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="position: absolute; width: 260px; height: 260px; border-radius: 9999px; background: radial-gradient(circle, rgba(212,175,55,0.18) 0%, rgba(212,175,55,0.03) 65%, transparent 100%); pointer-events: none;"></div>
+        <img src="/pwa-512x512.png" alt="متجر LC الرسمي" style="width: 152px; height: 152px; border-radius: 34px; box-shadow: 0 16px 40px rgba(184, 134, 11, 0.14); position: relative; z-index: 2;" />
+        <div style="margin-top: 16px; font-size: 14px; font-weight: 700; color: #8B6914; letter-spacing: 0.02em; position: relative; z-index: 2;">متجر LC الرسمي</div>
+        <div style="margin-top: 2px; font-size: 10px; font-family: 'Cinzel', Georgia, serif; font-weight: 600; color: #9E9E9E; letter-spacing: 0.28em; text-transform: uppercase; position: relative; z-index: 2;">OFFICIAL BOUTIQUE</div>
+        <div style="margin-top: 16px; width: 144px; height: 2.5px; background: rgba(212,175,55,0.2); border-radius: 9999px; overflow: hidden; position: relative; z-index: 2;">
+          <div style="position: absolute; top: 0; bottom: 0; right: 0; width: 40%; background: linear-gradient(90deg, #AA7A1E, #D4AF37, #8A6415); border-radius: 9999px;"></div>
         </div>
-        <div style="margin-top: 12px; font-size: 11px; color: #737373; font-weight: 500;">انقر في أي مكان للدخول الفوري</div>
+        <div style="margin-top: 14px; font-size: 11px; color: #A3A3A3; font-weight: 500; position: relative; z-index: 2;">انقر في أي مكان للدخول الفوري</div>
       </div>
     </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
